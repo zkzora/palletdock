@@ -13,7 +13,8 @@
     "@palletdock/chain": "workspace:*",
     "@palletdock/db": "workspace:*",
     "@palletdock/shared": "workspace:*",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "viem": "^2.37.0"
   },
   "devDependencies": {
     "@types/pg": "^8.15.5"

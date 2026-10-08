@@ -66,6 +66,11 @@ function requiredHex(value: unknown, field: string, bytes?: number): Hex {
   return value as Hex;
 }
 
+function requiredData(value: unknown, field: string): Hex {
+  if (typeof value !== 'string' || !/^0x([0-9a-fA-F]{2})*$/.test(value)) throw new Error(`RPC response has invalid ${field}`);
+  return value as Hex;
+}
+
 function requiredQuantity(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`RPC response has invalid ${field}`);
   const quantity = toDecimalString(value);
@@ -223,7 +228,7 @@ function normalizeLog(value: unknown): EvmLog {
   return {
     address: address(raw.address, 'log address'),
     topics: raw.topics.map((topic, i) => requiredHex(topic, `log topic ${i}`, 32)),
-    data: requiredHex(raw.data, 'log data'),
+    data: requiredData(raw.data, 'log data'),
     blockNumber: requiredQuantity(raw.blockNumber, 'log block number'),
     blockHash: requiredHex(raw.blockHash, 'log block hash', 32),
     transactionHash: requiredHex(raw.transactionHash, 'log transaction hash', 32),
