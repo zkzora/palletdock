@@ -3,6 +3,12 @@ import pg from 'pg';
 import { inject } from 'vitest';
 import { createPool, migrate, hashPassword } from '@palletdock/db';
 
+declare module 'vitest' {
+  export interface ProvidedContext {
+    adminDatabaseUrl: string;
+  }
+}
+
 export interface TestDatabase {
   url: string;
   pool: pg.Pool;

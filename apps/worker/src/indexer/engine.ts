@@ -375,7 +375,7 @@ export class IndexerEngine {
       if (claim.attempts > 0) {
         await this.opsLog(src.project_id, src.id, 'INFO', `Recovered after ${claim.attempts} failed attempt(s); resumed from stored checkpoint.`, { fromBlock: from.toString(), toBlock: to.toString() }, c);
       }
-      await this.opsLog(src.project_id, src.id, 'INFO', `Checkpoint committed at ${to.toString()}`, { fromBlock: from.toString(), toBlock: to.toString(), logs: logs.length, inserted: n }, c);
+      await this.opsLog(src.project_id, src.id, 'INFO', `Checkpoint committed at ${to.toString()}`, { fromBlock: from.toString(), toBlock: to.toString(), head: head.toString(), logs: logs.length, inserted: n }, c);
       return n;
     });
     claim.attempts = 0;

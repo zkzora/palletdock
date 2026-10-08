@@ -132,7 +132,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     const projectId = stringParam((request.params as Record<string, unknown>).projectId);
     const project = await projectOwned(pool, projectId, auth.ownerId);
     if (!project) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
-    const [counts, source, transactions, events] = await Promise.all([
+    const [counts, source, transactions, events, contracts] = await Promise.all([
       pool.query(
         `SELECT
           (SELECT count(1)::int FROM contracts WHERE project_id=$1 AND removed_at IS NULL) AS contracts,
@@ -150,18 +150,19 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
         [projectId],
       ),
       pool.query(
-        `SELECT id,hash,kind,function_name,submission_status,inclusion_status,execution_status,created_at
-           FROM transactions WHERE project_id=$1 ORDER BY created_at DESC LIMIT 5`,
+        `SELECT id,hash,kind,function_name,submission_status,inclusion_status,execution_status,block_number::text,created_at,updated_at
+           FROM transactions WHERE project_id=$1 ORDER BY updated_at DESC LIMIT 8`,
         [projectId],
       ),
       pool.query(
-        `SELECT r.seq::text,r.block_number::text,r.transaction_hash,d.event_name,d.status,r.indexed_at
+        `SELECT r.seq::text,r.block_number::text,r.transaction_hash,r.log_index,d.event_name,d.status,r.indexed_at
            FROM raw_logs r LEFT JOIN decoded_events d ON d.raw_log_id=r.id
-          WHERE r.project_id=$1 AND r.canonical=true ORDER BY r.seq DESC LIMIT 5`,
+          WHERE r.project_id=$1 AND r.canonical=true ORDER BY r.seq DESC LIMIT 8`,
         [projectId],
       ),
+      pool.query(`SELECT id,name,address,source,created_at FROM contracts WHERE project_id=$1 AND removed_at IS NULL ORDER BY created_at DESC LIMIT 5`, [projectId]),
     ]);
-    return { data: { project, counts: counts.rows[0], indexer: source.rows[0] ?? null, transactions: transactions.rows, events: events.rows } };
+    return { data: { project, counts: counts.rows[0], indexer: source.rows[0] ?? null, transactions: transactions.rows, events: events.rows, contracts: contracts.rows } };
   });
 
   app.get('/workspace/network', async (request, reply) => {
@@ -234,7 +235,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     if (!(await projectOwned(pool, projectId, auth.ownerId))) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
     await withTx(pool, async (client) => {
       await client.query('UPDATE projects SET archived_at=now(),updated_at=now() WHERE id=$1', [projectId]);
-      await client.query(`UPDATE indexer_sources SET desired_state='archived',generation=generation+1,updated_at=now() WHERE project_id=$1 AND desired_state <> 'archived'`, [projectId]);
+      await client.query(`INSERT INTO ops_logs(project_id,source,level,message) VALUES ($1,'worker','INFO','Project archived: indexer jobs stopped and fenced.')`, [projectId]);
+      await client.query(`UPDATE indexer_sources SET desired_state='archived',status=CASE WHEN status IN ('recovery_required','completed') THEN status ELSE 'stopped' END,generation=generation+1,updated_at=now() WHERE project_id=$1 AND desired_state NOT IN ('archived','deleted')`, [projectId]);
     });
     return { data: { id: projectId, archived: true, workerResumeRequiredOnRestore: true } };
   });

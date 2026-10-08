@@ -452,6 +452,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
           compiler: s.artifact.compiler,
           creationBytecodeSha256: s.artifact.provenance.creationBytecodeSha256,
           creationBytes: (s.artifact.bytecode.length - 2) / 2,
+          abi: s.artifact.abi,
           ...describe(s.artifact.abi),
         })),
         artifacts: uploaded.rows.map((a) => ({ id: a.id, name: a.name, contractName: a.contract_name, bytecodeKind: a.bytecode_kind, compiler: a.compiler, checksum: a.checksum_sha256, provenance: a.provenance, createdAt: a.created_at, ...describe(a.abi) })),
@@ -683,6 +684,11 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     if (f !== 'all') {
       if (!filters[f]) return fail(reply, 'INVALID_QUERY', 'Unknown filter.');
       cond.push(`(${filters[f]})`);
+    }
+    if (q.hash) {
+      if (!HASH_RE.test(q.hash)) return fail(reply, 'INVALID_QUERY', 'hash must be a 32-byte 0x transaction hash.');
+      values.push(q.hash.toLowerCase());
+      cond.push(`lower(t.hash) = $${values.length}`);
     }
     if (q.before) {
       const [ts, id] = q.before.split('|');
@@ -979,7 +985,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         : [];
     // Lag samples from checkpoint commits recorded in the range.
     const lag = await pool.query(
-      `SELECT o.created_at, o.indexer_source_id, (o.detail->>'toBlock') AS to_block
+      `SELECT o.created_at, o.indexer_source_id, (o.detail->>'toBlock') AS to_block, (o.detail->>'head') AS head
          FROM ops_logs o JOIN indexer_sources s ON s.id=o.indexer_source_id
         WHERE s.project_id=$1 AND o.message LIKE 'Checkpoint committed%' AND o.created_at > now() - $2::interval ORDER BY o.created_at DESC LIMIT 300`,
       [g.project.id, range],
