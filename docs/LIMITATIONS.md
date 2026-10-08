@@ -9,5 +9,5 @@
 - **Transactions:** only PalletDock-prepared or explicitly registered hashes. A replacement transaction (same nonce, new hash) is not linked automatically.
 - **Artifacts:** no linked libraries, no source verification, no server-side compilation.
 - **Access:** one owner per deployment; no teams, no SSO, no billing. Not security audited.
-- **Ops:** Docker files are provided but were not run on the development machine (Docker unavailable). CI is defined but has not run yet.
+- **Ops:** Docker is verified only in CI (GitHub ubuntu runner: build and compose boot); no Docker on the development machine. CI runs on pull requests and manual dispatch. On Windows, embedded PostgreSQL for tests needs a clone path short enough for MAX_PATH.
 - **Out of scope:** native signing, Assets/Uniques/Nfts management, ink!, bridges/iBridge, BEEFY/parachain controls, tracing/debugger, AI features.

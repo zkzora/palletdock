@@ -165,3 +165,22 @@ describe('Backoff', () => {
     expect(low.failure(0)).toBe(500);
   });
 });
+
+describe('Backoff.attempt', () => {
+  it('skips overlapping attempts while one is in flight and records the failure once', async () => {
+    let clock = 0;
+    const b = new Backoff({ baseMs: 60_000, maxMs: 1_800_000, healthyMs: 60_000, random: () => 1 });
+    let release!: (v: boolean) => void;
+    let calls = 0;
+    const slow = b.attempt(() => { calls++; return new Promise<boolean>((r) => (release = r)); }, (v) => v, () => clock);
+    clock = 5_000;
+    expect((await b.attempt(async () => { calls++; return true; }, (v) => v, () => clock)).ran).toBe(false);
+    release(false);
+    const r = await slow;
+    expect(r).toMatchObject({ ran: true, nextInMs: 60_000 });
+    expect(calls).toBe(1);
+    expect(b.consecutiveFailures).toBe(1);
+    clock = 30_000;
+    expect(b.ready(clock)).toBe(false);
+  });
+});

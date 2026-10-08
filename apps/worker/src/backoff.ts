@@ -11,9 +11,31 @@ export class Backoff {
     private readonly opts: { baseMs: number; maxMs: number; healthyMs: number; random?: () => number },
   ) {}
 
-  /** True when an attempt is allowed at `now`. */
+  private inFlight = false;
+
+  /** True when an attempt is allowed at `now` and none is in flight. */
   ready(now = Date.now()): boolean {
-    return now >= this.nextAt;
+    return !this.inFlight && now >= this.nextAt;
+  }
+
+  /**
+   * Run one attempt if allowed. Overlapping calls (e.g. a timer firing while a
+   * slow attempt is still running) are skipped, so failures cannot stack up.
+   * `ok` decides whether the result counts as success.
+   */
+  async attempt<T>(fn: () => Promise<T>, ok: (r: T) => boolean, now: () => number = Date.now): Promise<{ ran: false } | { ran: true; result: T; nextInMs: number }> {
+    if (!this.ready(now())) return { ran: false };
+    this.inFlight = true;
+    try {
+      const result = await fn();
+      const nextInMs = ok(result) ? this.success(now()) : this.failure(now());
+      return { ran: true, result, nextInMs };
+    } catch (e) {
+      this.failure(now());
+      throw e;
+    } finally {
+      this.inFlight = false;
+    }
   }
 
   /** Record a successful attempt; schedules the next one at the healthy cadence. */

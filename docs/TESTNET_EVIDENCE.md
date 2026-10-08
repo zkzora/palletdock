@@ -22,10 +22,12 @@ Probes recorded by the worker in the local development database (`rpc_probes`):
 
 | Target | Endpoint | Result | Count | First | Last |
 | --- | --- | --- | --- | --- | --- |
-| EVM | https://testnetv3-eth-rpc.feso-apps.xyz | failed: `HTTP 502` (Cloudflare) | 89 | 2026-10-08T15:07:51Z | 2026-10-08T16:37:42Z |
-| Native | wss://testnetv3-node.feso-apps.xyz | failed: connection timed out after 15000 ms (HTTP probe: 502) | 89 | 2026-10-08T15:08:06Z | 2026-10-08T16:37:56Z |
+| EVM | https://testnetv3-eth-rpc.feso-apps.xyz | failed: `HTTP 502` (Cloudflare) | 121+ | 2026-10-08T15:07:51Z | still failing at 2026-10-08T17:29Z |
+| Native | wss://testnetv3-node.feso-apps.xyz | failed: connection timed out after 15000 ms (HTTP probe: 502) | 121+ | 2026-10-08T15:08:06Z | still failing at 2026-10-08T17:29Z |
 
-Manual checks at 2026-10-08T14:39Z, 14:40Z, and 16:26Z returned `error code: 502` for `eth_chainId`, `eth_blockNumber`, `net_version`, `web3_clientVersion`, `eth_gasPrice`, `eth_getBlockByNumber`, and `system_chain`. The node console (https://node-console.feso-apps.xyz/) returned HTTP 200. The developer guide still lists the same endpoints (checked 2026-10-08).
+Since 2026-10-08T17:26Z the worker probes with bounded exponential backoff (60 s while healthy; on failure the gap grows to ~30 min, jittered, with no overlapping probes). Observed gaps after a restart: 65 s, 110 s, then 212 s scheduled. A manual `eth_chainId` at 2026-10-08T17:25Z still returned 502.
+
+Manual checks at 2026-10-08T14:39Z, 14:40Z, 16:26Z, and 17:25Z returned `error code: 502` for `eth_chainId`, `eth_blockNumber`, `net_version`, `web3_clientVersion`, `eth_gasPrice`, `eth_getBlockByNumber`, and `system_chain`. The node console (https://node-console.feso-apps.xyz/) returned HTTP 200. The developer guide still lists the same endpoints (checked 2026-10-08).
 
 The Packet's `network.json` records an earlier successful read-only check (2026-10-04) of `eth_chainId` (`0x190f1ca9`) and `system_properties` (tPOTv3, 14 decimals, SS58 42). That is the only positive identity evidence available and it predates this implementation.
 

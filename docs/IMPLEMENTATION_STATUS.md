@@ -1,56 +1,61 @@
 # Implementation Status
 
-Updated: 2026-10-08. Vocabulary: **Not started · In progress · Implemented · Tested · Blocked**. "Tested" means the cited automated check passed locally; it does not imply live-network acceptance, production readiness, or a security audit. "Fixture" means the local Hardhat chain used by browser E2E, never Portaldot.
+Updated: 2026-10-09.
 
-## Latest verification (2026-10-08, Windows 11, Node 24, pnpm 11)
+Three separate questions per area:
 
-```text
-pnpm typecheck                                   pass (shared, db, chain, contracts, api, worker, web)
-pnpm test                                        11 files, 67 tests pass (Postgres integration via embedded PostgreSQL 18)
-pnpm --filter @palletdock/contracts check        pass (artifacts reproducible)
-pnpm --filter @palletdock/web build              pass (19 routes)
-pnpm e2e:fixture --project=desktop               6 pass (full vertical slice on fixture chain)
-pnpm e2e:fixture --project=mobile                1 pass (all workspace pages, no horizontal overflow)
-pnpm network:verify / worker probes              FAIL – Portaldot EVM RPC HTTP 502, native WS timeout (178 probes recorded)
-```
+- **Implemented**: the code exists in `main`.
+- **Locally tested**: an automated check passed: unit/integration tests (real PostgreSQL), browser E2E on the *fixture chain* (local Hardhat EVM, chain ID 420420777, labelled FIXTURE NETWORK), CI, or Docker. Not evidence about Portaldot.
+- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. **Nothing is live-verified yet**: both public RPCs return HTTP 502 (see TESTNET_EVIDENCE.md).
+
+## Verification runs
+
+| Run | Where | Result |
+| --- | --- | --- |
+| `pnpm test` | Windows working copy | 12 files, 76 tests pass |
+| Independent clean clone (`git clone` → `pnpm install --frozen-lockfile` → contracts check → typecheck → test → web build) | Windows, short path `C:\PalletDock\_verify`, 2026-10-09 | all steps exit 0; 12 files / 75 tests (commit ba3534a) |
+| Same, long path under `%TEMP%` | Windows | **failed**: embedded PostgreSQL cannot read files past MAX_PATH (267 chars). Environment limit; test setup now reports it clearly (TROUBLESHOOTING.md) |
+| GitHub Actions CI run 37813541136 | ubuntu-latest, commit ba3534a | checks ✓ (12 files / 75 tests, artifacts reproducible, typecheck, build), fixture E2E ✓ (9 Playwright tests) |
+| GitHub Actions CI run 37815181739 | ubuntu-latest, commit 33735d8 | checks ✓, fixture E2E ✓, **docker ✓** (image build, compose app profile: migrate exited 0, API healthy, web `/login` 200, `/backend/health` 200, worker running) |
+| Fixture E2E | Windows, 2026-10-08 | desktop 6 + mobile 1 (+ screenshots) pass |
+| `pnpm audit --prod` | 2026-10-09 | no known vulnerabilities |
+| Live identity probes | local worker → Portaldot | **failing**: EVM HTTP 502, native WS timeout; 0 fingerprints activated |
 
 ## Status by area
 
-| Area | Status | Evidence / notes |
-| --- | --- | --- |
-| Monorepo, lockfile, scripts | Tested | `pnpm typecheck`, CI workflow `.github/workflows/ci.yml` (defined, not yet run on GitHub) |
-| Network config + RPC allowlist (SSRF) | Tested | `packages/shared/test/quantity.test.ts` |
-| Network identity fingerprint, mismatch halt | Implemented | `apps/worker/src/network.ts`; live activation **Blocked** (RPC 502) |
-| Network reset migration | Tested | `apps/worker/test/network-reset.test.ts` |
-| Lossless quantities / unit policy | Tested | `quantity.test.ts`; EVM unit **unverified** by design |
-| Artifact + ABI validation, arg coercion | Tested | `packages/shared/test/abi.test.ts` |
-| Reproducible sample contracts (Storage, ERC-20, ERC-721) | Tested | `packages/contracts` check; Revive compatibility **Blocked** (needs live deploy) |
-| Owner auth, sessions, CSRF, login rate limit | Tested | `apps/api/test/api.test.ts` |
-| Project CRUD, archive/restore, export | Tested | `api.test.ts`, `fixture-flow.spec.ts` |
-| Project and owner isolation | Tested | `api.test.ts` (every workspace route, malformed ids) |
-| Contract import (code check), ABI versions, remove | Tested | `api.test.ts`, fixture E2E import rejection |
-| Read (eth_call) with lossless output | Tested | `api.test.ts`, fixture E2E |
-| Write/deploy preparation, fee estimate, revert decoding | Tested | `api.test.ts` (custom error), fixture E2E (deploy + write) |
-| Storage deposit dry run (reviveApi) | Implemented | `SubstrateAdapter.dryRunStorageDeposit`; unavailable path tested; live shape **Blocked** |
-| Account mapping (reviveApi.accountId) | Implemented | Codec handling unit-tested in `packages/chain/test/substrate.test.ts`; live **Blocked** |
-| Browser wallet: wrong network, rejection, unknown/timeout, late hash | Tested | `apps/web/test/wallet-core.test.ts`, fixture E2E rejection |
-| Submission state machine (no rewrite after submit) | Tested | `api.test.ts` |
-| Receipt tracker, reorged_out, contract-from-receipt | Tested (fixture) | fixture E2E deploy → contract tracked; reorged_out path not covered by a dedicated test |
-| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges | Tested | `apps/worker/test/indexer.test.ts` (13 tests) |
-| Indexer: reorg rollback/replacement, deep reorg → recovery_required | Tested | `indexer.test.ts` |
-| Indexer: archive-during-fetch, stale lease, concurrent workers, restart, duplicates | Tested | `indexer.test.ts` |
-| Read API v1, keys (scope/expiry/revocation/replace), redaction | Tested | `api.test.ts` |
-| Cursor snapshots bound to filters/fingerprint/reorg epoch | Tested | `api.test.ts`, `apps/api/test/cursor.test.ts` |
-| OpenAPI conformance | Tested | `apps/api/test/openapi.test.ts` |
-| Request logging + monitoring queries/filters | Tested | `api.test.ts`, fixture E2E filter → query |
-| Web UI (design port): overview, contracts, deploy, import, contract detail, transactions, tx detail, indexer, API playground/keys/endpoints, monitoring, settings, network, docs, landing | Tested (fixture) | `fixture-flow.spec.ts`, screenshots via `fixture-screens.spec.ts` |
-| Fixture-mode labelling | Tested | E2E asserts the FIXTURE NETWORK banner |
-| Docker images / compose app profile | Implemented | Not run (no Docker on the dev machine) |
-| Live acceptance (deploy, write, index, API, restart/interruption on Portaldot) | **Blocked** | RPC outage; needs human-funded wallet + approval. See WALKTHROUGH.md, TESTNET_EVIDENCE.md |
+| Area | Implemented | Locally tested | Live-testnet verified |
+| --- | --- | --- | --- |
+| Network config, RPC allowlist (SSRF) | ✓ | ✓ `quantity.test.ts` | – |
+| Identity fingerprint, mismatch halt | ✓ | partial (reset path tested; probe logic unit-tested in chain tests) | ✗ RPC 502 |
+| Bounded RPC backoff (probes, receipts, indexer) | ✓ | ✓ `Backoff` + overlap test; worker log spacing measured | n/a |
+| Network reset migration (manual, `--confirm`) | ✓ | ✓ `network-reset.test.ts` | not run (needs your approval) |
+| Lossless quantities, EVM unit policy (raw) | ✓ | ✓ | ✗ EVM denomination unverified |
+| Artifact/ABI validation, argument coercion | ✓ | ✓ `abi.test.ts` | – |
+| Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ✗ Revive compatibility unknown |
+| Owner auth, sessions, CSRF, login limits | ✓ | ✓ `api.test.ts` | n/a |
+| Projects, archive/restore, export | ✓ | ✓ API + fixture E2E | n/a |
+| Owner/project isolation | ✓ | ✓ every workspace route | n/a |
+| Contract import (code check), ABI versions, remove | ✓ | ✓ API + fixture E2E | ✗ |
+| Read (eth_call), lossless output | ✓ | ✓ | ✗ |
+| Write/deploy preparation, fee estimate, revert decoding | ✓ | ✓ (custom error decode; deploy + write on fixture) | ✗ |
+| Storage-deposit dry run (reviveApi) | ✓ | unavailable path only | ✗ runtime API shape unknown |
+| Account mapping (reviveApi.accountId) | ✓ | codec unit test | ✗ |
+| Wallet: wrong network, sender change, rejection, insufficient funds, unknown/timeout, late hash | ✓ | ✓ `wallet-core.test.ts`, fixture E2E rejection | ✗ |
+| Submission state machine | ✓ | ✓ | ✗ |
+| Receipt tracker: inclusion, revert, disappearance → reorged_out, re-inclusion, sender/recipient match, deploy → contract | ✓ | ✓ `tx-tracker.test.ts` (dedicated) | ✗ |
+| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ✗ |
+| Indexer: reorg rollback/replacement, deep reorg → recovery_required | ✓ | ✓ | ✗ |
+| Read API v1, keys, redaction, snapshot cursors | ✓ | ✓ `api.test.ts`, `cursor.test.ts` | ✗ |
+| OpenAPI conformance | ✓ | ✓ `openapi.test.ts` | n/a |
+| Monitoring and request logging | ✓ | ✓ | ✗ live probes failing (recorded) |
+| Web UI (design port), mobile layout | ✓ | ✓ fixture E2E desktop + mobile | ✗ |
+| Docker image + compose | ✓ | ✓ CI docker job | n/a |
+| CI | ✓ | ✓ two green runs | n/a |
+| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture only | **✗ Blocked** |
 
-## Known gaps worth doing next
+## Open items
 
-- A dedicated test for the receipt tracker's `reorged_out` and receipt-moved paths.
-- Live capability probe set (fee history, `finalized` tag, log range limit) recorded into `rpc_probes`.
-- Record and apply a verified EVM unit policy after the live balance comparison.
-- Replacement-transaction linking (same nonce), and storage-deposit observation from runtime events.
+- Live walkthrough (WALKTHROUGH.md) once the RPCs answer; then record evidence.
+- If Revive rejects the EVM bytecode: PolkaVM (resolc) builds of the samples.
+- Live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy.
+- Replacement-transaction linking by nonce.

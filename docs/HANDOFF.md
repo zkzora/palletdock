@@ -50,8 +50,9 @@ On Linux the fixture stack stops its children by process group; on Windows use `
 
 ## Next steps, in priority order
 
-1. When the RPCs respond, run WALKTHROUGH.md (human approves every wallet prompt) and record TESTNET_EVIDENCE.md.
-2. If the Revive runtime rejects the EVM bytecode, add a PolkaVM (resolc) build of the samples. Artifact validation already detects `bytecodeKind: polkavm`.
-3. Add live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy.
-4. Write a dedicated receipt-tracker reorg test, and link replacement transactions by nonce.
-5. Run the CI workflow on a pull request and fix anything specific to Linux.
+1. **Live walkthrough** (WALKTHROUGH.md) once `pnpm network:verify` succeeds. A human approves every wallet prompt and funds the wallet; record TESTNET_EVIDENCE.md. Do not accept a network reset or change the network without the owner's approval.
+2. If Revive rejects the EVM bytecode: add PolkaVM (resolc) builds of the samples (artifact validation already detects `polkavm`).
+3. Live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy from the balance comparison.
+4. Replacement-transaction linking by nonce.
+
+Done since the previous handoff: a dedicated receipt-tracker test (disappearance, re-inclusion, mismatch), bounded RPC backoff with an overlap guard, an independent clean-clone rerun, two green CI runs including a Docker compose boot, and the security review in SECURITY_REVIEW.md.

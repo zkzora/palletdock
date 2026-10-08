@@ -49,17 +49,16 @@ const probeBackoff = new Backoff({ baseMs: 60_000, maxMs: 30 * 60_000, healthyMs
 const trackerBackoff = new Backoff({ baseMs: 4_000, maxMs: 10 * 60_000, healthyMs: 4_000 });
 
 async function verify(): Promise<void> {
-  if (!probeBackoff.ready()) return;
-  const result = await verifyAndRecordNetwork(pool).catch((e) => {
-    probeBackoff.failure();
-    throw e;
-  });
+  const nativeDisabled = process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled';
+  const r = await probeBackoff.attempt(
+    () => verifyAndRecordNetwork(pool),
+    (v) => v.evm.status === 'responded' && (v.substrate.status === 'responded' || nativeDisabled),
+  );
+  if (!r.ran) return;
+  const result = r.result;
   networkStatus = result.status;
-  const nativeOk = result.substrate.status === 'responded' || process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled';
-  if (result.evm.status === 'responded' && nativeOk) probeBackoff.success();
-  else {
-    const wait = probeBackoff.failure();
-    console.log(`[worker] probe failed ${probeBackoff.consecutiveFailures}x; next identity probe in ${Math.round(wait / 1000)} s`);
+  if (probeBackoff.consecutiveFailures > 0) {
+    console.log(`[worker] probe failed ${probeBackoff.consecutiveFailures}x; next identity probe in ${Math.round(r.nextInMs / 1000)} s`);
   }
   if (result.status === 'mismatch') {
     await pool.query(
@@ -114,21 +113,18 @@ async function indexLoop(): Promise<void> {
   }
 }
 
-let tracking = false;
 async function trackLoop(): Promise<void> {
-  if (tracking || stopping || networkStatus === 'mismatch' || networkStatus === 'starting' || !trackerBackoff.ready()) return;
-  tracking = true;
+  if (stopping || networkStatus === 'mismatch' || networkStatus === 'starting') return;
   try {
-    const r = await tracker.runOnce();
-    if (r.checked > 0 && r.failed === r.checked) {
-      const wait = trackerBackoff.failure();
-      console.log(`[worker] receipt checks failing (${r.failed}); next attempt in ${Math.round(wait / 1000)} s`);
-    } else trackerBackoff.success();
+    const r = await trackerBackoff.attempt(
+      () => tracker.runOnce(),
+      (x) => !(x.checked > 0 && x.failed === x.checked),
+    );
+    if (r.ran && trackerBackoff.consecutiveFailures > 0) {
+      console.log(`[worker] receipt checks failing (${r.result.failed}); next attempt in ${Math.round(r.nextInMs / 1000)} s`);
+    }
   } catch (e) {
-    trackerBackoff.failure();
     console.error(`[worker] receipt tracker error: ${(e as Error).message}`);
-  } finally {
-    tracking = false;
   }
 }
 
