@@ -1,82 +1,81 @@
 # PalletDock
 
-PalletDock is an in-progress developer workspace for Portaldot V3 Testnet. This repository contains a connected Next.js workspace, lossless chain adapters, PostgreSQL schema, single-owner authentication, project and read-key management, authenticated read APIs, and network monitoring. It is not yet a complete MVP and has not passed live wallet acceptance.
+PalletDock is a self-hosted developer workspace for **Portaldot V3 Testnet** (EVM layer). One project keeps a contract's artifacts, wallet-signed deployments and writes, tracked receipts, indexed events, a scoped read API, and monitoring together, and always shows the network, block, and freshness context behind each value.
 
-## Local setup
+> Status: testnet MVP. The full workflow is implemented and passes automated tests, including browser E2E against a local fixture chain. **Live acceptance on Portaldot V3 Testnet is blocked**: both public Portaldot RPC endpoints returned HTTP 502 throughout development (see [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md)). Not audited, not production-ready, no mainnet support. Portaldot is not Polkadot; PalletDock is independent tooling.
 
-Requirements: Node.js 22+, pnpm 11+, and either Docker or the bundled development PostgreSQL binary.
+## What it does
 
-```powershell
-Copy-Item .env.example .env
+| Area | Implemented |
+| --- | --- |
+| Projects | Single-owner login, create/search/switch/edit, export without secrets, archive with fenced indexer stop, controlled restore |
+| Network | Allowlisted RPCs only; identity fingerprint (native genesis + EVM chain ID + runtime) pinned by the worker; reset requires an explicit migration |
+| Accounts | EVM wallet signing in the browser (EIP-1193); EVM → native mapping via runtime `reviveApi.accountId` with block/runtime provenance |
+| Contracts | Artifact upload validation; bundled reproducible Storage / ERC-20 / ERC-721 samples; deploy wizard; import with runtime-code check; ABI versions; ABI-driven read and write with fee + storage-deposit dry-run review; custom error decoding |
+| Transactions | Submission, inclusion, execution, finality, indexing tracked separately; wallet rejection, wrong network, unknown/timeout, revert, and receipt-disappeared states; hash registration; reconcile |
+| Indexer | Separate worker; leased, generation-fenced commits; adaptive `eth_getLogs`; backoff with jitter; header ancestry checks; reorg rollback and reindex; recovery-required state; raw + decoded logs |
+| Read API | `GET /v1/projects/{id}/{contracts,transactions,events,indexer}`; hashed, scoped, expiring, revocable, replaceable keys; signed snapshot cursors; OpenAPI at `/openapi.yaml` |
+| Monitoring | Probes (responded / failed / stale / unavailable), worker heartbeat, lag, API errors from recorded requests, filtered and paginated logs |
+
+Out of scope (not built): native signing and native event indexing, Assets/Uniques/Nfts, ink!, bridges, finality proofs, tracing, source verification, team roles, billing.
+
+## Layout
+
+```text
+apps/web        Next.js 16 workspace, landing, docs (ported from the supplied PalletDock design)
+apps/api        Fastify: owner sessions, workspace routes, public /v1 read API
+apps/worker     Indexer, receipt tracker, network probes (independent process)
+packages/chain  EVM JSON-RPC adapter and Substrate adapter (identity, mapping, dry run)
+packages/shared Network allowlist, lossless quantities, ABI/artifact validation, schemas
+packages/db     SQL migrations, migration runner, owner CLI
+packages/contracts  Sample Solidity sources + reproducible artifacts (solc 0.8.24)
+packages/e2e-chain  Local Hardhat node for browser E2E only (not Portaldot)
+docs/           Architecture, API, network, walkthrough, status, handoff, evidence
+```
+
+## Setup
+
+Requirements: Node.js 22+, pnpm 11+. PostgreSQL comes from `embedded-postgres` (no install) or Docker.
+
+```bash
 pnpm install
-pnpm db:start
-```
-
-In a second terminal:
-
-```powershell
+cp .env.example .env          # set PALLETDOCK_CURSOR_SECRET to a random 32-byte value
+pnpm db:start                 # terminal 1: local PostgreSQL on 127.0.0.1:55432 (or: docker compose up -d postgres)
 pnpm db:migrate
-pnpm owner:create --email you@example.com
-pnpm dev:api
+pnpm owner:create --email you@example.com      # prompts for a password (min 12 chars)
+pnpm dev:api                  # terminal 2: API on API_PORT (default 4100)
+pnpm dev:worker               # terminal 3: indexer, receipts, probes
+pnpm dev:web                  # terminal 4: web on 3000, proxies /backend/* to PALLETDOCK_API_URL
+pnpm network:verify           # optional: one read-only identity probe
 ```
 
-In additional terminals, start the worker and web application:
+Windows helper for long-running services (PIDs in `.data/*.pid`, logs in `.data/logs/`):
 
 ```powershell
-pnpm dev:worker
-pnpm dev:web
+powershell -File scripts/dev-services.ps1 start|stop|restart|status
 ```
 
-The embedded database listens on `127.0.0.1:55432`. The API defaults to `127.0.0.1:4100`; set `API_PORT` if that port is occupied. The web app defaults to `127.0.0.1:3000` and forwards `/backend/*` to `PALLETDOCK_API_URL`. The owner command prompts for a password unless `PALLETDOCK_OWNER_PASSWORD` is deliberately supplied.
+Docker (unverified here; Docker was not available on the development machine): `docker compose --profile app up -d`, then `docker compose run --rm owner --email you@example.com`.
 
-Docker users can replace `pnpm db:start` with:
+## Tests
 
-```powershell
-docker compose up -d postgres
-```
-
-## Checks
-
-```powershell
+```bash
 pnpm typecheck
-pnpm test
-pnpm build
-pnpm e2e
-pnpm network:verify
+pnpm test                         # vitest: unit + Postgres integration (starts a throwaway PostgreSQL)
+pnpm --filter @palletdock/contracts check   # committed artifacts match a fresh compile
+pnpm --filter @palletdock/web build
+pnpm e2e:stack                    # terminal A: isolated fixture stack (ports 3199/4199/8599)
+pnpm e2e:fixture                  # terminal B: Playwright desktop + mobile against it
 ```
 
-`network:verify` is read-only. It records timestamped EVM and native identity probes, activates a fingerprint only after both sides respond with the expected configured identity, and exits nonzero when the network is unavailable or mismatched.
+The fixture stack uses a local Hardhat chain with Portaldot's chain ID and labels the UI **FIXTURE NETWORK**. Fixture results are never live evidence. Stop it with Ctrl+C or `scripts/e2e-stack-stop.ps1`.
 
-The Playwright suite expects a running API and web app. Set `PALLETDOCK_E2E_PASSWORD` to the local owner password and, when using non-default ports, set `PALLETDOCK_WEB_URL`.
+## Docs
 
-## Web routes
-
-- `/` - product landing page using the supplied PalletDock visual direction
-- `/login` - owner session login
-- `/app` - project overview backed by persisted data
-- `/app/projects` and `/app/projects/new` - project discovery and creation
-- `/app/api/keys` - one-time key creation, metadata listing, and revocation
-- `/app/network` - network probes, active fingerprint, and worker health
-- `/docs` - local implementation and Packet documentation entry point
-
-Contract import, transaction, indexer, monitoring, activity, and settings screens currently show explicit not-connected states rather than prototype fixtures.
-
-## Implemented HTTP routes
-
-- `GET /health`
-- `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
-- `GET|POST /workspace/projects`
-- `GET /workspace/projects/:projectId/overview`
-- `PATCH /workspace/projects/:projectId`
-- `POST /workspace/projects/:projectId/archive|restore`
-- `GET|POST /workspace/projects/:projectId/keys`
-- `POST /workspace/projects/:projectId/keys/:keyId/revoke`
-- `GET /workspace/network`
-- `GET /v1/projects/:projectId/contracts`
-- `GET /v1/projects/:projectId/transactions`
-- `GET /v1/projects/:projectId/events`
-- `GET /v1/projects/:projectId/indexer`
-
-Workspace mutations require a same-site session cookie and `x-csrf-token`. `/v1` routes require a scoped project Bearer key. Key secrets are returned once and only their SHA-256 digest is stored. Pagination cursors are signed and bound to the project, resource, filters, and snapshot.
-
-See [implementation status](docs/IMPLEMENTATION_STATUS.md) and [handoff](docs/HANDOFF.md) before continuing development.
+- [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) – human steps for the live testnet acceptance run
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – processes, data model, indexer algorithm, security
+- [docs/API.md](docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml) – read API
+- [docs/NETWORK.md](docs/NETWORK.md) – identity verification, units, mapping, reset migration
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/LIMITATIONS.md](docs/LIMITATIONS.md)
+- [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [docs/HANDOFF.md](docs/HANDOFF.md), [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md)
+- In-app docs at `/docs`

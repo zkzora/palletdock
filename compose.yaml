@@ -1,3 +1,8 @@
+# Local stack: PostgreSQL + migrations + API + worker + web.
+#   docker compose up -d postgres            # database only (use with pnpm dev:*)
+#   docker compose --profile app up -d       # everything
+#   docker compose run --rm owner --email you@example.com   # create the owner (prompts for password)
+# Secrets: copy .env.example to .env and set PALLETDOCK_CURSOR_SECRET before starting the app profile.
 services:
   postgres:
     image: postgres:17-alpine
@@ -6,7 +11,7 @@ services:
       POSTGRES_PASSWORD: palletdock_dev_only
       POSTGRES_DB: palletdock
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - palletdock-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -14,6 +19,73 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
+
+  migrate:
+    profiles: [app]
+    build: .
+    command: pnpm db:migrate
+    environment:
+      DATABASE_URL: postgresql://palletdock:palletdock_dev_only@postgres:5432/palletdock
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  owner:
+    profiles: [tools]
+    build: .
+    entrypoint: ["pnpm", "--filter", "@palletdock/db", "owner:create"]
+    environment:
+      DATABASE_URL: postgresql://palletdock:palletdock_dev_only@postgres:5432/palletdock
+    stdin_open: true
+    tty: true
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    profiles: [app]
+    build: .
+    command: pnpm --filter @palletdock/api start
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://palletdock:palletdock_dev_only@postgres:5432/palletdock
+      API_HOST: 0.0.0.0
+      API_PORT: "4100"
+      WEB_ORIGIN: http://127.0.0.1:3000
+    ports:
+      - "127.0.0.1:4100:4100"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  worker:
+    profiles: [app]
+    build: .
+    command: pnpm --filter @palletdock/worker start
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://palletdock:palletdock_dev_only@postgres:5432/palletdock
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  web:
+    profiles: [app]
+    build:
+      context: .
+      args:
+        PALLETDOCK_API_URL: http://api:4100
+    command: pnpm --filter @palletdock/web exec next start --hostname 0.0.0.0 --port 3000
+    environment:
+      PALLETDOCK_API_URL: http://api:4100
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

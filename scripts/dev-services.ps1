@@ -5,6 +5,7 @@
 # PIDs are stored in .data/<name>.pid and logs in .data/logs/<name>.{out,err}.log.
 param([ValidateSet('start', 'stop', 'status', 'restart')][string]$Action = 'status', [string[]]$Only = @('api', 'worker', 'web'))
 
+$Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 New-Item -ItemType Directory -Force .data\logs | Out-Null

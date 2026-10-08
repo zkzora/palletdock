@@ -314,8 +314,15 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
 }
 
 if (process.env.NODE_ENV !== 'test') {
-  const app = await buildServer();
   const host = process.env.API_HOST ?? '127.0.0.1';
+  const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
+  if (process.env.NODE_ENV === 'production' && process.env.SESSION_COOKIE_SECURE !== '1') {
+    throw new Error('Refusing to start in production without SESSION_COOKIE_SECURE=1 (HTTPS-only session cookies).');
+  }
+  if (!loopback && process.env.NODE_ENV !== 'production') {
+    console.warn(`[api] listening on ${host} outside production mode. Use only on a private network.`);
+  }
+  const app = await buildServer();
   const port = Number(process.env.API_PORT ?? 4100);
   await app.listen({ host, port });
 }

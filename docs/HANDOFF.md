@@ -1,42 +1,57 @@
 # Handoff
 
-## Current checkpoint
+For the next agent or developer. Read IMPLEMENTATION_STATUS.md first.
 
-Work resumed from an interrupted scaffold whose last action was creating the chain package manifest. The chain package, database runtime, API foundation, network-monitor worker, and connected Next.js workspace now compile and pass the checks listed in `IMPLEMENTATION_STATUS.md`. The web UI uses the existing PalletDock landing and dashboard exports rather than inventing a replacement design.
+## Where things stand (2026-10-08)
 
-The active local development services at handoff are:
+The full MVP workflow is implemented and passes automated tests, including a browser E2E vertical slice on a local fixture chain. The one remaining acceptance item is **live verification on Portaldot V3 Testnet**: both public RPCs returned HTTP 502 for the entire session, so no fingerprint was activated and no live transaction exists. Do not claim live completion until WALKTHROUGH.md has been run by a human with a funded wallet and TESTNET_EVIDENCE.md is filled in.
 
-- PostgreSQL: `127.0.0.1:55432`; launcher PID is recorded in `.data/db.pid`.
-- PalletDock API: `http://127.0.0.1:4101`; launcher PID is recorded in `.data/api.pid`.
-- Port `4100` belongs to an unrelated process and was left untouched.
-- PalletDock web: `http://127.0.0.1:3001`; launcher PID is recorded in `.data/web.pid`.
-- Port `3000` belongs to an unrelated process and was left untouched.
-- Worker: running in degraded mode; launcher PID is recorded in `.data/worker.pid`. It persists heartbeats and retries identity probes while both upstream RPCs are unavailable.
+## Repository conventions
 
-Logs are under `.data/logs/`. `.data/` is ignored by git. A recoverable backup of the initial empty WIN1252 cluster is at `.data/postgres-win1252-backup`; the active cluster was reinitialized with UTF-8.
+- Commits are authored by the repository owner. Do not add AI co-author trailers (owner's instruction).
+- Code style: TypeScript ESM, `.js` import specifiers in Node packages. The web app does not import workspace Node packages (validation and encoding happen in the API).
+- Chain quantities are strings end to end (`int8`/`numeric` come back from node-pg as strings).
+- Every workspace route uses `workspaceGuard` (session + ownership; mutations also need CSRF and a non-archived project unless allowed).
+- Fixture runs must stay visibly labelled and must never be written into TESTNET_EVIDENCE.md.
 
-Local acceptance created one owner (`owner@palletdock.local`), one project named `Local acceptance`, and one expiring read key. The one-time key secret was not written to a file or committed. This is local test data, not demo/live-chain evidence.
+## Key files
 
-## Important decisions
+| Concern | File |
+| --- | --- |
+| Schema | `packages/db/migrations/0001_init.sql` (add new numbered files; applied files are checksummed) |
+| Indexer | `apps/worker/src/indexer/engine.ts`, `decode.ts`; tests `apps/worker/test/indexer.test.ts` with `fake-chain.ts` |
+| Receipts | `apps/worker/src/tx-tracker.ts` |
+| Network identity / reset | `apps/worker/src/network.ts`, `network-reset.ts` |
+| Workspace API | `apps/api/src/workspace.ts`, auth helpers `context.ts`, project/auth/keys routes `server.ts` |
+| Public API | `apps/api/src/v1.ts`, `cursor.ts`, spec `docs/openapi.yaml` |
+| Chain adapters | `packages/chain/src/evm.ts`, `substrate.ts` (mapping + dry run), `json-rpc.ts` |
+| Wallet | `apps/web/lib/wallet-core.ts` (tested), `wallet.tsx`, sign flow `components/sign-flow.tsx` |
+| UI pages | `apps/web/app/app/**` |
+| E2E | `scripts/e2e-stack.ts`, `apps/web/e2e/fixture-*.ts`, `playwright.fixture.config.ts` |
 
-- Browser wallets must own all signing and broadcasting. Server adapters are read-only.
-- A native/EVM identity pair is required before activating a network fingerprint. Partial or failed probes remain probe records only.
-- EVM denominations remain raw and unverified; native 14 decimals are never applied to EVM quantities automatically.
-- Project archive increments indexer generation to fence stale work. Restore deliberately does not resume workers.
-- API key lookup uses a visible random prefix; only a digest of the full secret is stored.
-- Read cursors are HMAC-signed and bound to project/resource/filter/snapshot. Invalid cursors return restart-required rather than drifting.
-- The API currently defaults to 4100 in `.env.example`; use 4101 in this workstation session because 4100 is occupied.
-- The web app currently defaults to 3000; use 3001 in this workstation session because 3000 is occupied. Its `/backend` rewrite targets the API through `PALLETDOCK_API_URL`.
-- `PalletDock Landing.dc.html` and `PalletDock App v2.dc.html` are the visual source of truth. Extracted reusable tokens are documented in `brand.md`; Packet remains the behavior/content source.
-- Prototype fixture rows are not presented as real data. Unimplemented dashboard areas show a precise not-connected state.
+## Local environment on the original machine
 
-## Exact next implementation slice
+- PostgreSQL `127.0.0.1:55432` (`pnpm db:start`, data in `.data/postgres`), API `127.0.0.1:4101`, web `127.0.0.1:3001`, worker. Managed with `scripts/dev-services.ps1`. `.env` (gitignored) holds a random cursor secret and `PALLETDOCK_DEV_CONTROLS=1`.
+- Ports 3000 and 4100 belong to an unrelated project (Collara). Do not stop them.
+- The dev owner `owner@palletdock.local` was created by an earlier session and its password was not stored. Run `pnpm owner:create --email <you>` to set a new one (this updates the single owner and revokes sessions).
 
-1. Add worker lease acquisition/renewal and generation checks using `indexer_jobs`.
-2. Implement bounded/adaptive `eth_getLogs` backfill with atomic header/log/coverage/checkpoint commit, including empty ranges.
-3. Decode logs against the pinned ABI version while preserving unknown and malformed raw logs.
-4. Add deterministic tests for duplicate ingestion, archive-during-fetch fencing, worker restart, RPC backoff, and one-block reorg replacement.
-5. Expose session-authenticated contract import and indexer configuration routes, update the OpenAPI file, and connect the existing contracts/indexer screens.
-6. Extend Playwright coverage through contract import and indexer configuration once those APIs are available.
+## In a fresh clone (cloud session)
 
-Do not claim the MVP complete until the live acceptance chain in the original prompt—deployment, write receipt, matching indexed event, authenticated API response, restart/recovery—is recorded with human-approved testnet transactions.
+```bash
+pnpm install
+cp .env.example .env        # set PALLETDOCK_CURSOR_SECRET
+pnpm db:start               # or docker compose up -d postgres
+pnpm db:migrate && pnpm owner:create --email you@example.com
+pnpm test                   # starts its own throwaway PostgreSQL (or set TEST_DATABASE_URL)
+pnpm e2e:stack & pnpm e2e:fixture   # needs Chrome for Playwright: pnpm --filter @palletdock/web exec playwright install chrome
+```
+
+On Linux the fixture stack stops its children by process group; on Windows use `scripts/e2e-stack-stop.ps1`.
+
+## Next steps, in priority order
+
+1. When the RPCs respond, run WALKTHROUGH.md (human approves every wallet prompt) and record TESTNET_EVIDENCE.md.
+2. If the Revive runtime rejects the EVM bytecode, add a PolkaVM (resolc) build of the samples. Artifact validation already detects `bytecodeKind: polkavm`.
+3. Add live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy.
+4. Write a dedicated receipt-tracker reorg test, and link replacement transactions by nonce.
+5. Run the CI workflow on a pull request and fix anything specific to Linux.

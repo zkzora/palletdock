@@ -1,42 +1,56 @@
 # Implementation Status
 
-Updated: 2026-10-08 (Asia/Jakarta)
+Updated: 2026-10-08. Vocabulary: **Not started · In progress · Implemented · Tested · Blocked**. "Tested" means the cited automated check passed locally; it does not imply live-network acceptance, production readiness, or a security audit. "Fixture" means the local Hardhat chain used by browser E2E, never Portaldot.
 
-Status vocabulary: **Not started**, **In progress**, **Implemented**, **Tested**, **Blocked**. “Tested” here means the cited local/deterministic check passed; it does not imply production readiness or a security audit.
-
-| Area | Status | Evidence / limits |
-| --- | --- | --- |
-| pnpm monorepo and lockfile | Tested | Six workspace projects install; `pnpm typecheck` passes. |
-| Shared network/quantity helpers | Tested | Exact bigint/decimal handling and allowlisted RPC configuration compile; chain tests exercise values above JS safe integer. |
-| ABI/artifact validation | Implemented | Schema, creation bytecode, linking, scalar/array/tuple coercion exist. Dedicated validation tests still need expansion. |
-| PostgreSQL schema and migration runner | Tested | `0001_init.sql` applied to local PostgreSQL; a second `pnpm db:migrate` reported up to date. Initial schema includes ownership, chain identity, contracts, transaction stages, indexer leases/checkpoints/logs, keys, probes, and monitoring logs. |
-| Local database startup | Tested | Embedded PostgreSQL starts on `127.0.0.1:55432` with explicit UTF-8 initialization. Docker Compose is supplied but Docker is not installed in this environment. |
-| EVM adapter | Tested | Deterministic tests cover identity mismatch, exact quantities, block tags, JSON-RPC errors, and timeouts. Read methods cover identity, headers, code, call/estimate, receipts, fees, and logs. No server-side signing or broadcast is implemented. |
-| Native identity/account mapping adapter | Implemented | Reads runtime identity and `reviveApi.accountId` at an explicit finalized block, retaining block/runtime provenance. Unit tests validate `Option<AccountId32>` handling. Live mapping is blocked by endpoint availability. |
-| Live network verification | Blocked | 2026-10-08 probe: EVM endpoint HTTP 502; native WebSocket timed out after 15 seconds. Failed probes were persisted. No network fingerprint was activated. |
-| Single-owner session authentication | Tested | Local acceptance logged in through an HttpOnly SameSite cookie; passwords use scrypt; login attempts are recorded/rate limited; mutations require CSRF. Broader adversarial testing remains. |
-| Project CRUD/archive lifecycle | Tested | Local acceptance created a persisted project. Archive fences indexers by incrementing generation; restore does not silently resume them. Search and delete are not implemented. |
-| Project read-key lifecycle | Tested | Local acceptance created a scoped expiring key, returned its secret once, and called a real read route. Metadata listing and revocation exist. Replacement flow is not implemented. |
-| Read API | Tested | Contracts/transactions/events/indexer endpoints authorize by project and scope. Limits are bounded; exact values remain strings; signed cursors bind project/filter/snapshot. Local empty-contract response passed. Request logging and full filter coverage remain. |
-| Network monitor worker | Tested | Worker heartbeat and persisted identity probes run locally. Current health is degraded because both upstream RPC probes fail. The worker is not an event indexer yet. |
-| Web visual system and responsive shell | Tested | The supplied landing/dashboard exports were ported to Next.js with their dark tokens, typography, navigation, desktop sidebar, and mobile drawer. Desktop and mobile Playwright projects pass. |
-| Web owner, project, and overview flows | Tested | Login/session bootstrap, project search/filter/create, project switching, and persisted overview metrics are connected to workspace APIs. Loading, empty, error, and unauthorized states are present. |
-| Web key and network flows | Tested | Key creation displays the secret once; metadata listing/revocation, probe history, active fingerprint, and worker health use live API responses. No sample chain records are substituted. |
-| Event indexer/reorg recovery | Not started | Schema is present; fetch, lease/fencing commit loop, ancestry rollback, decoding, and recovery tests are not implemented. |
-| Contract import/deploy/read/write | Not started | Chain reads and schema foundations exist; browser-wallet approval flows and contract routes do not. |
-| Contract artifacts | Not started | Reproducible Storage/ERC-20/ERC-721 builds and provenance have not been added. |
-| Remaining dashboard workflows | In progress | Routes for contracts, transactions, indexer, monitoring, activity, and settings preserve the navigation model but deliberately show not-connected states until their backend slices exist. |
-| OpenAPI | Not started | Packet draft has not been reconciled with the implemented routes. |
-| Live wallet acceptance | Blocked | Requires reachable RPCs, compiler compatibility, a human-funded testnet wallet, and human approval. No address or transaction evidence has been fabricated. |
-
-## Latest automated verification
+## Latest verification (2026-10-08, Windows 11, Node 24, pnpm 11)
 
 ```text
-pnpm typecheck: passed (shared, db, chain, api, worker, web)
-pnpm test: 4 files, 10 tests passed
-pnpm --filter @palletdock/web build: passed; 10 routes generated
-Playwright: 4 tests passed across desktop Chrome and mobile Chrome profiles
-pnpm db:migrate: applied 0001_init.sql; repeat run up to date
-local API acceptance: health, login, CSRF project create, one-time key create, authenticated empty contracts response passed
-worker runtime: heartbeat started; EVM/native health reported unavailable without activating a fingerprint
+pnpm typecheck                                   pass (shared, db, chain, contracts, api, worker, web)
+pnpm test                                        11 files, 67 tests pass (Postgres integration via embedded PostgreSQL 18)
+pnpm --filter @palletdock/contracts check        pass (artifacts reproducible)
+pnpm --filter @palletdock/web build              pass (19 routes)
+pnpm e2e:fixture --project=desktop               6 pass (full vertical slice on fixture chain)
+pnpm e2e:fixture --project=mobile                1 pass (all workspace pages, no horizontal overflow)
+pnpm network:verify / worker probes              FAIL – Portaldot EVM RPC HTTP 502, native WS timeout (178 probes recorded)
 ```
+
+## Status by area
+
+| Area | Status | Evidence / notes |
+| --- | --- | --- |
+| Monorepo, lockfile, scripts | Tested | `pnpm typecheck`, CI workflow `.github/workflows/ci.yml` (defined, not yet run on GitHub) |
+| Network config + RPC allowlist (SSRF) | Tested | `packages/shared/test/quantity.test.ts` |
+| Network identity fingerprint, mismatch halt | Implemented | `apps/worker/src/network.ts`; live activation **Blocked** (RPC 502) |
+| Network reset migration | Tested | `apps/worker/test/network-reset.test.ts` |
+| Lossless quantities / unit policy | Tested | `quantity.test.ts`; EVM unit **unverified** by design |
+| Artifact + ABI validation, arg coercion | Tested | `packages/shared/test/abi.test.ts` |
+| Reproducible sample contracts (Storage, ERC-20, ERC-721) | Tested | `packages/contracts` check; Revive compatibility **Blocked** (needs live deploy) |
+| Owner auth, sessions, CSRF, login rate limit | Tested | `apps/api/test/api.test.ts` |
+| Project CRUD, archive/restore, export | Tested | `api.test.ts`, `fixture-flow.spec.ts` |
+| Project and owner isolation | Tested | `api.test.ts` (every workspace route, malformed ids) |
+| Contract import (code check), ABI versions, remove | Tested | `api.test.ts`, fixture E2E import rejection |
+| Read (eth_call) with lossless output | Tested | `api.test.ts`, fixture E2E |
+| Write/deploy preparation, fee estimate, revert decoding | Tested | `api.test.ts` (custom error), fixture E2E (deploy + write) |
+| Storage deposit dry run (reviveApi) | Implemented | `SubstrateAdapter.dryRunStorageDeposit`; unavailable path tested; live shape **Blocked** |
+| Account mapping (reviveApi.accountId) | Implemented | Codec handling unit-tested in `packages/chain/test/substrate.test.ts`; live **Blocked** |
+| Browser wallet: wrong network, rejection, unknown/timeout, late hash | Tested | `apps/web/test/wallet-core.test.ts`, fixture E2E rejection |
+| Submission state machine (no rewrite after submit) | Tested | `api.test.ts` |
+| Receipt tracker, reorged_out, contract-from-receipt | Tested (fixture) | fixture E2E deploy → contract tracked; reorged_out path not covered by a dedicated test |
+| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges | Tested | `apps/worker/test/indexer.test.ts` (13 tests) |
+| Indexer: reorg rollback/replacement, deep reorg → recovery_required | Tested | `indexer.test.ts` |
+| Indexer: archive-during-fetch, stale lease, concurrent workers, restart, duplicates | Tested | `indexer.test.ts` |
+| Read API v1, keys (scope/expiry/revocation/replace), redaction | Tested | `api.test.ts` |
+| Cursor snapshots bound to filters/fingerprint/reorg epoch | Tested | `api.test.ts`, `apps/api/test/cursor.test.ts` |
+| OpenAPI conformance | Tested | `apps/api/test/openapi.test.ts` |
+| Request logging + monitoring queries/filters | Tested | `api.test.ts`, fixture E2E filter → query |
+| Web UI (design port): overview, contracts, deploy, import, contract detail, transactions, tx detail, indexer, API playground/keys/endpoints, monitoring, settings, network, docs, landing | Tested (fixture) | `fixture-flow.spec.ts`, screenshots via `fixture-screens.spec.ts` |
+| Fixture-mode labelling | Tested | E2E asserts the FIXTURE NETWORK banner |
+| Docker images / compose app profile | Implemented | Not run (no Docker on the dev machine) |
+| Live acceptance (deploy, write, index, API, restart/interruption on Portaldot) | **Blocked** | RPC outage; needs human-funded wallet + approval. See WALKTHROUGH.md, TESTNET_EVIDENCE.md |
+
+## Known gaps worth doing next
+
+- A dedicated test for the receipt tracker's `reorged_out` and receipt-moved paths.
+- Live capability probe set (fee history, `finalized` tag, log range limit) recorded into `rpc_probes`.
+- Record and apply a verified EVM unit policy after the live balance comparison.
+- Replacement-transaction linking (same nonce), and storage-deposit observation from runtime events.
