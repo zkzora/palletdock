@@ -107,6 +107,13 @@ describe('project isolation', () => {
     expect(list.json().data.map((p: { name: string }) => p.name)).toEqual(['Beta']);
   });
 
+  it('returns 409 (not 500) when renaming a project to an existing name', async () => {
+    const other = (await ws(sessionA, 'POST', '/workspace/projects', { name: 'Alpha Two' })).json().data;
+    const r = await ws(sessionA, 'PATCH', `/workspace/projects/${other.id}`, { name: 'Alpha' });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().error.code).toBe('CONFLICT');
+  });
+
   it('returns 404 for malformed ids instead of a server error', async () => {
     expect((await ws(sessionA, 'GET', `/workspace/projects/not-a-uuid/contracts`)).statusCode).toBe(404);
     expect((await ws(sessionA, 'GET', `/workspace/projects/${A.projectId}/contracts/not-a-uuid`)).statusCode).toBe(404);

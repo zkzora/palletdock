@@ -5,6 +5,7 @@ import { resolveNetwork } from '@palletdock/shared';
 import { verifyAndRecordNetwork } from './network.js';
 import { IndexerEngine } from './indexer/engine.js';
 import { TransactionTracker } from './tx-tracker.js';
+import { Backoff } from './backoff.js';
 
 loadEnv();
 const workerId = `${hostname()}:${process.pid}:${randomToken(6)}`;
@@ -27,7 +28,7 @@ class ControlledRpc implements RpcCaller {
 
 const rpc = new ControlledRpc(new JsonRpcClient(network.evmRpcUrl, { timeoutMs: 20_000 }));
 const evm = new EvmAdapter(network, rpc);
-const indexer = new IndexerEngine(pool, evm, { workerId });
+const indexer = new IndexerEngine(pool, evm, { workerId, backoffMaxMs: 10 * 60_000 });
 const tracker = new TransactionTracker(pool, evm);
 
 let stopping = false;
@@ -42,9 +43,24 @@ async function heartbeat(): Promise<void> {
   );
 }
 
+// RPC traffic is bounded: identity probes run every 60 s while healthy and back
+// off exponentially (60 s → 30 min, jittered) while the RPCs are failing.
+const probeBackoff = new Backoff({ baseMs: 60_000, maxMs: 30 * 60_000, healthyMs: 60_000 });
+const trackerBackoff = new Backoff({ baseMs: 4_000, maxMs: 10 * 60_000, healthyMs: 4_000 });
+
 async function verify(): Promise<void> {
-  const result = await verifyAndRecordNetwork(pool);
+  if (!probeBackoff.ready()) return;
+  const result = await verifyAndRecordNetwork(pool).catch((e) => {
+    probeBackoff.failure();
+    throw e;
+  });
   networkStatus = result.status;
+  const nativeOk = result.substrate.status === 'responded' || process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled';
+  if (result.evm.status === 'responded' && nativeOk) probeBackoff.success();
+  else {
+    const wait = probeBackoff.failure();
+    console.log(`[worker] probe failed ${probeBackoff.consecutiveFailures}x; next identity probe in ${Math.round(wait / 1000)} s`);
+  }
   if (result.status === 'mismatch') {
     await pool.query(
       `INSERT INTO ops_logs(source,level,message,detail) VALUES ('network','ERROR','Network identity changed. Indexing and receipt tracking are stopped until an operator migration is performed.',$1)`,
@@ -61,15 +77,21 @@ async function consumeCommands(): Promise<void> {
   for (const c of cmds.rows) {
     if (c.command === 'reconnect') {
       await pool.query(`UPDATE indexer_jobs SET next_run_at=now(), attempts=0 WHERE ($1::uuid IS NULL OR source_id=$1)`, [c.source_id]);
-      await pool.query(`INSERT INTO ops_logs(source,level,message,indexer_source_id) VALUES ('worker','INFO','Reconnect requested; retrying from the stored checkpoint now.',$1)`, [c.source_id]);
+      await pool.query(
+        `INSERT INTO ops_logs(project_id,source,level,message,indexer_source_id) VALUES ((SELECT project_id FROM indexer_sources WHERE id=$1),'worker','INFO','Reconnect requested; retrying from the stored checkpoint now.',$1)`,
+        [c.source_id],
+      );
     } else if (c.command === 'simulate_rpc_failure') {
       if (!devControls) {
-        await pool.query(`INSERT INTO ops_logs(source,level,message,indexer_source_id) VALUES ('worker','WARN','Ignored simulated RPC failure: development controls are disabled.',$1)`, [c.source_id]);
+        await pool.query(
+          `INSERT INTO ops_logs(project_id,source,level,message,indexer_source_id) VALUES ((SELECT project_id FROM indexer_sources WHERE id=$1),'worker','WARN','Ignored simulated RPC failure: development controls are disabled.',$1)`,
+          [c.source_id],
+        );
         continue;
       }
       rpc.injectedFailures += 3;
       await pool.query(
-        `INSERT INTO ops_logs(source,level,message,detail,indexer_source_id) VALUES ('worker','WARN','Development control: next 3 RPC calls will fail.',$1,$2)`,
+        `INSERT INTO ops_logs(project_id,source,level,message,detail,indexer_source_id) VALUES ((SELECT project_id FROM indexer_sources WHERE id=$2),'worker','WARN','Development control: next 3 RPC calls will fail.',$1,$2)`,
         [JSON.stringify({ simulated: true }), c.source_id],
       );
     }
@@ -94,11 +116,16 @@ async function indexLoop(): Promise<void> {
 
 let tracking = false;
 async function trackLoop(): Promise<void> {
-  if (tracking || stopping || networkStatus === 'mismatch' || networkStatus === 'starting') return;
+  if (tracking || stopping || networkStatus === 'mismatch' || networkStatus === 'starting' || !trackerBackoff.ready()) return;
   tracking = true;
   try {
-    await tracker.runOnce();
+    const r = await tracker.runOnce();
+    if (r.checked > 0 && r.failed === r.checked) {
+      const wait = trackerBackoff.failure();
+      console.log(`[worker] receipt checks failing (${r.failed}); next attempt in ${Math.round(wait / 1000)} s`);
+    } else trackerBackoff.success();
   } catch (e) {
+    trackerBackoff.failure();
     console.error(`[worker] receipt tracker error: ${(e as Error).message}`);
   } finally {
     tracking = false;
@@ -128,7 +155,7 @@ const safe = (name: string, fn: () => Promise<void>) => () => void fn().catch((e
 await heartbeat();
 await verify().catch((error) => console.error(`[worker] initial probe failed: ${(error as Error).message}`));
 timers.push(setInterval(safe('heartbeat', heartbeat), 10_000));
-timers.push(setInterval(safe('probe', verify), 60_000));
+timers.push(setInterval(safe('probe', verify), 5_000)); // gated by probeBackoff
 timers.push(setInterval(safe('commands', consumeCommands), 2_000));
 timers.push(setInterval(safe('indexer', indexLoop), 2_000));
 timers.push(setInterval(safe('tracker', trackLoop), 4_000));

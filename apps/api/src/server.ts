@@ -229,11 +229,16 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     if (!parsed.success || !Object.keys(parsed.data ?? {}).length) return fail(reply, 'INVALID_REQUEST', parsed.success ? 'No project changes were supplied.' : parsed.error.issues[0]?.message ?? 'Invalid project.');
     const current = await projectOwned(pool, projectId, auth.ownerId);
     if (!current) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
-    const result = await pool.query(
-      'UPDATE projects SET name=$1,description=$2,updated_at=now() WHERE id=$3 AND owner_id=$4 RETURNING *',
-      [parsed.data.name ?? current.name, parsed.data.description ?? current.description, projectId, auth.ownerId],
-    );
-    return { data: result.rows[0] };
+    try {
+      const result = await pool.query(
+        'UPDATE projects SET name=$1,description=$2,updated_at=now() WHERE id=$3 AND owner_id=$4 RETURNING *',
+        [parsed.data.name ?? current.name, parsed.data.description ?? current.description, projectId, auth.ownerId],
+      );
+      return { data: result.rows[0] };
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') return fail(reply, 'CONFLICT', 'A project with this name already exists.');
+      throw error;
+    }
   });
 
   app.post('/workspace/projects/:projectId/archive', async (request, reply) => {

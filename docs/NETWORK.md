@@ -17,7 +17,7 @@ Overrides (`PORTALDOT_EVM_RPC_URL`, `PORTALDOT_SUBSTRATE_RPC_URL`) must match th
 
 ## Identity verification
 
-`pnpm network:verify` (and the worker every 60 s) runs:
+`pnpm network:verify` (and the worker: every 60 s while healthy, with jittered exponential backoff up to 30 min while probes fail, so an outage is not polled continuously) runs:
 
 - EVM: `eth_chainId` (must be 0x190f1ca9), `eth_getBlockByNumber(0x0)`, `eth_getBlockByNumber(latest)`, `web3_clientVersion`.
 - Native: genesis hash, best and finalized heads, runtime version, `system_properties` (SS58 42, tPOTv3, 14 decimals must match).

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | PostgreSQL | `packages/db/migrations` | Single source of truth: owners, sessions, network identity, projects, artifacts, contracts, ABI versions, transactions + observations, indexer sources/jobs/checkpoints/headers, raw logs, decoded events, API keys, request logs, ops logs, probes, heartbeats, worker commands |
 | API | `apps/api` (Fastify) | Owner auth and sessions, CSRF-protected workspace routes (`/workspace/...`), public read API (`/v1/...`), `/openapi.yaml`, `/health` |
-| Worker | `apps/worker` | Network identity probes (60 s), indexer loop (2 s), receipt tracker (4 s), control commands, retention pruning. Independent of browsers and HTTP requests |
+| Worker | `apps/worker` | Network identity probes (60 s while healthy; bounded exponential backoff up to 30 min while failing), indexer loop (per-source backoff up to 10 min on RPC errors), receipt tracker (4 s; backs off up to 10 min while all checks fail), control commands, retention pruning. Independent of browsers and HTTP requests |
 | Web | `apps/web` (Next.js 16) | Landing, docs, workspace UI. Proxies `/backend/*` to the API so session cookies are same-origin. Wallet signing happens here (EIP-1193) |
 
 Coordination is through PostgreSQL only (no Redis or broker): leases on `indexer_jobs`, commands in `worker_commands`.

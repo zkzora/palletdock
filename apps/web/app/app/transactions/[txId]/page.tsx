@@ -26,6 +26,7 @@ const STAGE_TONE: Record<string, Tone> = {
   execution_unknown: 'unknown',
   contract_tracked: 'success',
   reconcile: 'info',
+  receipt_mismatch: 'warning',
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -44,6 +45,7 @@ const STAGE_LABEL: Record<string, string> = {
   execution_unknown: 'Execution status unknown',
   contract_tracked: 'Contract added to project',
   reconcile: 'Account activity checked',
+  receipt_mismatch: 'Receipt does not match the reviewed request',
 };
 
 export default function TransactionDetailPage() {

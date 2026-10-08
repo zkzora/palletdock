@@ -60,7 +60,7 @@ export const DOCS: Doc[] = [
       ['p', 'PalletDock runs as four processes: PostgreSQL, the API (Fastify), the worker (indexer, receipt tracker, network probes), and the web app (Next.js). Node.js 22+ and pnpm are required. Docker is optional.'],
       ['h', 'Install and start'],
       ['code', 'pnpm install\ncp .env.example .env            # then set PALLETDOCK_CURSOR_SECRET to a random value\npnpm db:start                   # local PostgreSQL (or: docker compose up -d postgres)\npnpm db:migrate\npnpm owner:create --email you@example.com   # prompts for a password (min 12 chars)\npnpm dev:api & pnpm dev:worker & pnpm dev:web'],
-      ['p', 'Open the web app, sign in with the owner account, and create a project. The worker verifies the network identity on start and every minute; chain-bound actions stay disabled until a fingerprint is verified.'],
+      ['p', 'Open the web app, sign in with the owner account, and create a project. The worker verifies the network identity on start, every minute while healthy, and with bounded exponential backoff (up to 30 minutes) while the RPCs fail; chain-bound actions stay disabled until a fingerprint is verified.'],
       ['h', 'First workflow'],
       ['list', [
         'Create a project (network is fixed to Portaldot V3 Testnet).',
@@ -76,7 +76,7 @@ export const DOCS: Doc[] = [
     slug: 'network',
     group: 'Network and accounts',
     title: 'Portaldot V3 Network',
-    meta: [['Source', 'Portaldot V3 developer guide'], ['Checked by', 'The worker, at runtime, on every start and every 60 s']],
+    meta: [['Source', 'Portaldot V3 developer guide'], ['Checked by', 'The worker: on start, every 60 s while healthy, backing off up to 30 min while failing']],
     blocks: [
       ['table', [
         ['Network', 'Portaldot V3 Testnet'],

@@ -15,11 +15,12 @@ export class TransactionTracker {
     private readonly opts: { batch?: number; recheckIncludedBlocks?: number } = {},
   ) {}
 
-  async runOnce(): Promise<number> {
+  /** Check a batch of tracked transactions. `failed` counts RPC/DB errors (drives worker backoff). */
+  async runOnce(): Promise<{ checked: number; changed: number; failed: number }> {
     const batch = this.opts.batch ?? 25;
     const rows = (
       await this.pool.query(
-        `SELECT t.id,t.project_id,t.fingerprint_id,t.hash,t.kind,t.inclusion_status,t.execution_status,t.block_hash,t.artifact_id,t.contract_id,t.input,
+        `SELECT t.id,t.project_id,t.fingerprint_id,t.hash,t.kind,t.origin,t.from_address,t.to_address,t.inclusion_status,t.execution_status,t.block_hash,t.artifact_id,t.contract_id,t.input,
                 t.abi_version_id,p.archived_at
            FROM transactions t JOIN projects p ON p.id=t.project_id
            JOIN network_fingerprints f ON f.id=t.fingerprint_id AND f.status='active'
@@ -33,10 +34,12 @@ export class TransactionTracker {
       )
     ).rows;
     let changed = 0;
+    let failed = 0;
     for (const t of rows) {
       try {
         if (await this.check(t)) changed++;
       } catch (e) {
+        failed++;
         await this.pool.query(`UPDATE transactions SET last_checked_at=now() WHERE id=$1`, [t.id]);
         await this.pool.query(
           `INSERT INTO ops_logs(project_id,source,level,message,detail,transaction_id) VALUES ($1,'transaction','WARN',$2,$3,$4)`,
@@ -44,7 +47,7 @@ export class TransactionTracker {
         );
       }
     }
-    return changed;
+    return { checked: rows.length, changed, failed };
   }
 
   private async observe(c: pg.PoolClient | pg.Pool, txId: string, stage: string, detail: string) {
@@ -76,11 +79,28 @@ export class TransactionTracker {
         await client.query('COMMIT');
         return false;
       }
+      // The hash came from the browser; make sure the receipt belongs to the reviewed request.
+      const fromMismatch = t.from_address && receipt.from.toLowerCase() !== String(t.from_address).toLowerCase();
+      const toMismatch = t.origin === 'palletdock' && (t.kind === 'deploy' ? receipt.to !== null : (receipt.to ?? '').toLowerCase() !== String(t.to_address ?? '').toLowerCase());
+      if (fromMismatch || toMismatch) {
+        const already = await client.query(`SELECT 1 FROM transaction_observations WHERE transaction_id=$1 AND stage='receipt_mismatch'`, [t.id]);
+        await client.query(`UPDATE transactions SET last_checked_at=now(), error_message=$2, updated_at=now() WHERE id=$1`, [
+          t.id,
+          'The receipt for this hash does not match the reviewed sender/recipient. The receipt was not applied.',
+        ]);
+        if (!already.rowCount) {
+          await this.observe(client, t.id, 'receipt_mismatch', `Receipt from ${receipt.from} to ${receipt.to ?? 'contract creation'} does not match the prepared request (${t.from_address} → ${t.to_address ?? 'contract creation'}).`);
+        }
+        await client.query('COMMIT');
+        return false;
+      }
       const moved = cur.inclusion_status === 'included' || cur.inclusion_status === 'reorged_out';
       await client.query(
         `UPDATE transactions SET inclusion_status='included', execution_status=$2, block_number=$3, block_hash=$4, gas_used=$5,
                 effective_gas_price=$6, fee_raw=$7, receipt=$8, contract_address=COALESCE($9, contract_address),
-                from_address=COALESCE(from_address,$10), indexing_status=CASE WHEN $11::int = 0 THEN 'no_events' WHEN indexing_status='indexed' THEN 'indexed' ELSE 'pending' END,
+                from_address=COALESCE(from_address,$10), indexing_status=CASE WHEN $11::int = 0 THEN 'no_events' WHEN indexing_status='indexed' THEN 'indexed'
+                  WHEN EXISTS (SELECT 1 FROM indexer_sources s WHERE s.project_id=transactions.project_id AND s.desired_state <> 'deleted'
+                               AND lower(s.contract_address) = ANY($12::text[])) THEN 'pending' ELSE 'not_covered' END,
                 last_checked_at=now(), updated_at=now()
           WHERE id=$1`,
         [
@@ -95,6 +115,7 @@ export class TransactionTracker {
           receipt.contractAddress?.toLowerCase() ?? null,
           receipt.from.toLowerCase(),
           receipt.logs.length,
+          [...new Set(receipt.logs.map((l) => l.address.toLowerCase()))],
         ],
       );
       await this.observe(client, t.id, moved ? 'receipt_moved' : 'receipt_observed', `Receipt observed in block ${receipt.blockNumber} (${receipt.blockHash}). Inclusion only; finality not confirmed.`);
