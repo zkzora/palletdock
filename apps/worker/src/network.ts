@@ -12,7 +12,13 @@ export interface NetworkVerification {
 
 export async function verifyAndRecordNetwork(pool: pg.Pool): Promise<NetworkVerification> {
   const network = resolveNetwork();
-  const [evm, substrate] = await Promise.all([probeEvm(network), probeSubstrate(network)]);
+  const nativeDisabled = process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled';
+  const [evm, substrate] = await Promise.all([
+    probeEvm(network),
+    nativeDisabled
+      ? Promise.resolve<ProbeResult<SubstrateIdentity>>({ status: 'failed', latencyMs: 0, observedAt: new Date().toISOString(), value: null, error: 'Native adapter disabled by configuration (fixture mode).' })
+      : probeSubstrate(network),
+  ]);
   let fingerprintId: string | null = null;
   let status: NetworkVerification['status'] = 'unavailable';
 

@@ -188,6 +188,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
           nativeTokenDecimals: config.nativeTokenDecimals,
           ss58Format: config.ss58Format,
           nodeConsoleUrl: config.nodeConsoleUrl,
+          fixture: /^(https?|wss?):\/\/(127\.0\.0\.1|localhost)[:/]/.test(config.evmRpcUrl),
+          nativeAdapter: process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled' ? 'disabled' : 'enabled',
         },
         probes: probes.rows,
         fingerprint: fingerprint.rows[0] ?? null,

@@ -167,8 +167,9 @@ export class EvmAdapter {
     return value as Hex;
   }
 
-  async estimateGas(request: EvmCallRequest): Promise<string> {
-    this.validateCallRequest(request);
+  /** Estimate gas; `to` may be omitted for contract creation. */
+  async estimateGas(request: Omit<EvmCallRequest, 'to'> & { to?: string }): Promise<string> {
+    this.validateCallRequest(request, true);
     return requiredQuantity(await this.rpc.call<unknown>('eth_estimateGas', [request]), 'gas estimate');
   }
 
@@ -213,8 +214,8 @@ export class EvmAdapter {
     return raw.map(normalizeLog);
   }
 
-  private validateCallRequest(request: EvmCallRequest): void {
-    if (!isAddress(request.to, { strict: false })) throw new Error('Invalid call destination');
+  private validateCallRequest(request: Omit<EvmCallRequest, 'to'> & { to?: string }, allowCreate = false): void {
+    if (request.to === undefined ? !allowCreate : !isAddress(request.to, { strict: false })) throw new Error('Invalid call destination');
     if (request.from && !isAddress(request.from, { strict: false })) throw new Error('Invalid call sender');
     if (request.data && !/^0x([0-9a-fA-F]{2})*$/.test(request.data)) throw new Error('Invalid call data');
     if (request.value && !/^0x[0-9a-fA-F]+$/.test(request.value)) throw new Error('Invalid call value');

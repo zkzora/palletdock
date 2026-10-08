@@ -19,7 +19,9 @@
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
     "build": "pnpm -r build",
-    "e2e": "pnpm --filter @palletdock/web e2e"
+    "e2e": "pnpm --filter @palletdock/web e2e",
+    "e2e:stack": "tsx scripts/e2e-stack.ts",
+    "e2e:fixture": "pnpm --filter @palletdock/web e2e:fixture"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

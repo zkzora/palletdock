@@ -1,0 +1,8 @@
+{
+  "name": "@palletdock/e2e-chain",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local Hardhat EVM node used only by browser E2E tests. Not a Portaldot network.",
+  "scripts": { "node": "hardhat node --hostname 127.0.0.1" },
+  "devDependencies": { "hardhat": "2.29.1" }
+}

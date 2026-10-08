@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit -p .",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:fixture": "playwright test -c playwright.fixture.config.ts"
   },
   "dependencies": {
     "lucide-react": "^0.545.0",

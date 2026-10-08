@@ -109,7 +109,7 @@ export default function MonitoringPage() {
             </div>
             <div className="card metric">
               <span>Indexer lag</span>
-              <strong>{!ix ? 'Unavailable' : ix.lagBlocks === null ? 'Unknown' : `${groupDigits(ix.lagBlocks)} blocks`}</strong>
+              <strong>{!ix ? 'Unavailable' : ['stopped', 'paused'].includes(ix.status) ? 'Not checked' : ix.status === 'error' || ix.lagBlocks === null ? 'Unknown' : `${groupDigits(ix.lagBlocks)} blocks`}</strong>
               <small className="mono">{ix ? `checkpoint ${ix.checkpoint_block ? groupDigits(ix.checkpoint_block) : '—'} · head ${ix.latest_observed_block ? groupDigits(ix.latest_observed_block) : '—'} · ${ix.status}` : 'No indexer configured.'}</small>
               <Link href={href('/app/indexer')} style={{ fontSize: 12.5 }}>Open indexer</Link>
             </div>

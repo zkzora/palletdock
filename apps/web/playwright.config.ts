@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: /fixture-.*\.spec\.ts/,
   timeout: 30_000,
   retries: 0,
   reporter: 'line',

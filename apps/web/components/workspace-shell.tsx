@@ -60,6 +60,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [message, setMessage] = useState('');
   const [navOpen, setNavOpen] = useState(false);
   const [signerOpen, setSignerOpen] = useState(false);
+  const [fixture, setFixture] = useState(false);
 
   const reloadProjects = useCallback(async () => {
     const result = await api<{ data: Project[] }>('/workspace/projects');
@@ -88,6 +89,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+  useEffect(() => {
+    if (status !== 'ready') return;
+    api<{ data: { config: { fixture?: boolean } } }>('/workspace/network')
+      .then((r) => setFixture(!!r.data.config.fixture))
+      .catch(() => {});
+  }, [status]);
 
   const requested = search.get('project');
   const project = projects.find((item) => item.id === requested) ?? projects.find((item) => !item.archived_at) ?? projects[0] ?? null;
@@ -244,6 +251,12 @@ function Shell({ children }: { children: React.ReactNode }) {
               {signer}
             </div>
           </header>
+          {fixture && (
+            <div className="archived-banner" role="note" style={{ background: '#1a1712', borderColor: '#3d3320', color: '#e6d3a8' }}>
+              <strong>FIXTURE NETWORK</strong>
+              <span style={{ color: '#d9c9a6' }}>The EVM RPC is a local test chain, not Portaldot V3 Testnet. Results here are test fixtures, never live evidence.</span>
+            </div>
+          )}
           {project?.archived_at && (
             <div className="archived-banner">
               <strong>Archived project</strong>

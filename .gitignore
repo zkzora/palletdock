@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-e2e/
 dist/
 .env
 .env.local
@@ -10,3 +11,4 @@ playwright-report/
 *.log
 *.tsbuildinfo
 evidence/private/
+playwright-report-fixture/

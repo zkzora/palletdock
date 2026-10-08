@@ -176,7 +176,7 @@ export default function IndexerPage() {
           {src.last_error} Stored records are kept as history; reindexing restarts coverage at block {groupDigits(src.start_block)}.
         </Notice>
       )}
-      {src.desired_state === 'archived' && <Notice tone="info">The project was archived, so this source is stopped. Restore the project, then resume here.</Notice>}
+      {src.desired_state === 'archived' && <Notice tone="info">{readOnly ? 'The project is archived, so this source is stopped. Restore the project in Settings, then resume here.' : 'Indexing stopped when the project was archived. Resume to continue from the stored checkpoint.'}</Notice>}
 
       <div className="metric-grid">
         <div className="card stat">

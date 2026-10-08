@@ -96,7 +96,8 @@ function parseArgsBody(body: Record<string, unknown>): unknown[] {
 export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: WorkspaceDeps = {}) {
   const network = deps.network ?? resolveNetwork();
   const evm = deps.evm ?? new EvmAdapter(network);
-  const connectSubstrate = deps.substrate === undefined ? () => SubstrateAdapter.connect(network, {}, 12_000) : deps.substrate;
+  const connectSubstrate =
+    deps.substrate !== undefined ? deps.substrate : process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled' ? null : () => SubstrateAdapter.connect(network, {}, 12_000);
   const devControls = deps.devControls ?? (process.env.PALLETDOCK_DEV_CONTROLS === '1' && process.env.NODE_ENV !== 'production');
   const P = '/workspace/projects/:projectId';
 
@@ -140,7 +141,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
 
   async function feeEstimate(request: { from: string; to?: string; data: Hex; value: bigint }) {
     try {
-      const gas = await evm.estimateGas({ from: request.from, to: request.to as string, data: request.data, value: `0x${request.value.toString(16)}` });
+      const gas = await evm.estimateGas({ from: request.from, ...(request.to ? { to: request.to } : {}), data: request.data, value: `0x${request.value.toString(16)}` });
       let gasPrice: string | null = null;
       try {
         gasPrice = await evm.gasPrice();
