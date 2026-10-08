@@ -1,0 +1,14 @@
+{
+  "name": "@palletdock/db",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "migrate": "tsx src/migrate-cli.ts",
+    "owner:create": "tsx src/owner-cli.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": { "pg": "^8.16.0", "@palletdock/shared": "workspace:*" },
+  "devDependencies": { "@types/pg": "^8.15.0" }
+}

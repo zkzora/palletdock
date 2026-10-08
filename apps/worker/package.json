@@ -1,0 +1,21 @@
+{
+  "name": "@palletdock/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "start": "tsx src/worker.ts",
+    "network:verify": "tsx src/network-verify.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@palletdock/chain": "workspace:*",
+    "@palletdock/db": "workspace:*",
+    "@palletdock/shared": "workspace:*",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5"
+  }
+}

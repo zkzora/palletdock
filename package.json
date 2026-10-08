@@ -1,0 +1,29 @@
+{
+  "name": "palletdock",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.13.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "db:start": "tsx scripts/dev-db.ts",
+    "db:migrate": "pnpm --filter @palletdock/db migrate",
+    "owner:create": "pnpm --filter @palletdock/db owner:create",
+    "network:verify": "pnpm --filter @palletdock/worker network:verify",
+    "dev:api": "pnpm --filter @palletdock/api dev",
+    "dev:worker": "pnpm --filter @palletdock/worker dev",
+    "dev:web": "pnpm --filter @palletdock/web dev",
+    "contracts:build": "pnpm --filter @palletdock/contracts build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "build": "pnpm -r build",
+    "e2e": "pnpm --filter @palletdock/web e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

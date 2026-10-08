@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@embedded-postgres/windows-x64': true
+  '@embedded-postgres/linux-x64': true
+  embedded-postgres: true
+  esbuild: true
+onlyBuiltDependencies:
+  - embedded-postgres
+  - "@embedded-postgres/windows-x64"
+  - "@embedded-postgres/linux-x64"
+  - esbuild
+  - sharp

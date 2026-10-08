@@ -1,0 +1,9 @@
+{
+  "name": "@palletdock/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p ." },
+  "dependencies": { "viem": "^2.37.0", "zod": "^4.1.0" }
+}
