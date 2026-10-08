@@ -17,3 +17,4 @@
 | `pnpm db:start` fails on Windows with an encoding error | Delete `.data/postgres` (local data) and restart; the launcher initialises UTF-8. |
 | Port already in use | Set `API_PORT`, `WEB_PORT` (dev-services script), or `E2E_*_PORT` for the fixture stack. |
 | Vitest finishes but waits ~10 s before exiting | Embedded PostgreSQL leaves file handles open on Windows; the exit code is still correct. |
+| Tests fail with `extension "plpgsql" is not available` on Windows | The clone path is too long: embedded PostgreSQL's extension files exceed MAX_PATH (260). Clone to a short path such as `C:\src\palletdock`, or set `TEST_DATABASE_URL`. The test setup now reports this explicitly. |
