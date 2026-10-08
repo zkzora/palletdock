@@ -1,0 +1,82 @@
+{
+  "contractName": "PalletDockStorage",
+  "sourceName": "src/PalletDockStorage.sol",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "caller",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "previousValue",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "newValue",
+          "type": "uint256"
+        }
+      ],
+      "name": "NumberChanged",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "retrieve",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "newValue",
+          "type": "uint256"
+        }
+      ],
+      "name": "store",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608060405234801561001057600080fd5b5060c98061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80632e64cec11460375780636057361d14604c575b600080fd5b60005460405190815260200160405180910390f35b605b605736600460a4565b605d565b005b6000805490829055604080518281526020810184905233917f8a0ae77ff4183de38d23837cbfa0ad4ee3ab54e24c501706d5a9e375d5a6bfc7910160405180910390a25050565b60006020828403121560b557600080fd5b503591905056fea164736f6c6343000818000a",
+  "deployedBytecode": "0x6080604052348015600f57600080fd5b506004361060325760003560e01c80632e64cec11460375780636057361d14604c575b600080fd5b60005460405190815260200160405180910390f35b605b605736600460a4565b605d565b005b6000805490829055604080518281526020810184905233917f8a0ae77ff4183de38d23837cbfa0ad4ee3ab54e24c501706d5a9e375d5a6bfc7910160405180910390a25050565b60006020828403121560b557600080fd5b503591905056fea164736f6c6343000818000a",
+  "linkReferences": {},
+  "compiler": {
+    "name": "solc",
+    "version": "0.8.24+commit.e11b9ed9.Emscripten.clang",
+    "settings": {
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "evmVersion": "paris",
+      "metadata": {
+        "bytecodeHash": "none"
+      }
+    },
+    "dependencies": {
+      "@openzeppelin/contracts": "5.1.0"
+    }
+  },
+  "provenance": {
+    "sourceSha256": "bda269b4d5011e5b35609336d2a83b1c2174361cc53ccc363cad5a39279a7aee",
+    "creationBytecodeSha256": "c75487ab0733d6b4c85c1f1a23f1e37f88029aab183dbd59715ffe84ea60cfc2",
+    "compatibility": "EVM bytecode. Portaldot V3 Revive acceptance is confirmed only by a recorded live deployment (see docs/TESTNET_EVIDENCE.md)."
+  }
+}

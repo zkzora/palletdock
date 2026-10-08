@@ -25,148 +25,41 @@ import {
   type ErrorCode,
   type ReadScope,
 } from '@palletdock/shared';
-import { decodeCursor, encodeCursor, normalizedFilterHash } from './cursor.js';
+import { registerRequestLogging, registerV1 } from './v1.js';
+import { registerWorkspace, type WorkspaceDeps } from './workspace.js';
+import {
+  SESSION_COOKIE,
+  cursorSecret,
+  fail,
+  keyAuth,
+  projectOwned,
+  requireCsrf,
+  sessionAuth,
+  stringParam,
+} from './context.js';
 
 loadEnv();
 
-const SESSION_COOKIE = 'palletdock_session';
-const CURSOR_SECRET = process.env.PALLETDOCK_CURSOR_SECRET ?? 'local-development-cursor-secret-change-me';
+const CURSOR_SECRET = cursorSecret();
 
-interface SessionAuth {
-  ownerId: string;
-  sessionId: string;
-  csrfToken: string;
-  email: string;
-}
-
-interface KeyAuth {
-  keyId: string;
-  projectId: string;
-  scopes: ReadScope[];
-}
-
-function fail(reply: FastifyReply, code: ErrorCode, message: string, requestId?: string): FastifyReply {
-  return reply.code(ERROR_CODES[code]).send({ error: { code, message, requestId: requestId ?? reply.request.id } });
-}
-
-function stringParam(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function requestedLimit(query: Record<string, unknown>): number {
-  const value = query.limit == null ? API_DEFAULT_LIMIT : Number(query.limit);
-  if (!Number.isInteger(value) || value < 1 || value > API_MAX_LIMIT) throw new Error(`limit must be between 1 and ${API_MAX_LIMIT}`);
-  return value;
-}
-
-function exactDecimal(value: unknown, label: string): string | null {
-  if (value == null || value === '') return null;
-  if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) throw new Error(`${label} must be a non-negative decimal integer`);
-  return value;
-}
-
-async function sessionAuth(pool: pg.Pool, request: FastifyRequest, reply: FastifyReply): Promise<SessionAuth | null> {
-  const token = request.cookies[SESSION_COOKIE];
-  if (!token) {
-    fail(reply, 'UNAUTHORIZED', 'Sign in to continue.');
-    return null;
-  }
-  const result = await pool.query(
-    `SELECT s.id AS session_id, s.csrf_token, o.id AS owner_id, o.email
-       FROM sessions s JOIN owners o ON o.id=s.owner_id
-      WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
-    [sha256Hex(token)],
-  );
-  if (!result.rowCount) {
-    reply.clearCookie(SESSION_COOKIE, { path: '/' });
-    fail(reply, 'UNAUTHORIZED', 'Session expired. Sign in again.');
-    return null;
-  }
-  const row = result.rows[0];
-  await pool.query('UPDATE sessions SET last_seen_at=now() WHERE id=$1', [row.session_id]);
-  return { ownerId: row.owner_id, sessionId: row.session_id, csrfToken: row.csrf_token, email: row.email };
-}
-
-function requireCsrf(auth: SessionAuth, request: FastifyRequest, reply: FastifyReply): boolean {
-  const supplied = request.headers['x-csrf-token'];
-  if (typeof supplied !== 'string' || !safeEqualStr(supplied, auth.csrfToken)) {
-    fail(reply, 'CSRF_REJECTED', 'The CSRF token is missing or invalid. Refresh the session and try again.');
-    return false;
-  }
-  return true;
-}
-
-async function keyAuth(pool: pg.Pool, request: FastifyRequest, reply: FastifyReply, projectId: string, scope: ReadScope): Promise<KeyAuth | null> {
-  const authorization = request.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) {
-    fail(reply, 'UNAUTHORIZED', 'Provide a project read key as a Bearer token.');
-    return null;
-  }
-  const token = authorization.slice(7).trim();
-  const dot = token.indexOf('.');
-  const prefix = dot > 0 ? token.slice(0, dot) : '';
-  if (!prefix.startsWith(API_KEY_PREFIX) || token.length > 256) {
-    fail(reply, 'UNAUTHORIZED', 'The project read key is invalid.');
-    return null;
-  }
-  const result = await pool.query(
-    `SELECT id, project_id, secret_hash, scopes
-       FROM api_keys
-      WHERE prefix=$1 AND revoked_at IS NULL AND expires_at > now()`,
-    [prefix],
-  );
-  const row = result.rows[0];
-  if (!row || !safeEqualStr(row.secret_hash, sha256Hex(token))) {
-    fail(reply, 'UNAUTHORIZED', 'The project read key is invalid or expired.');
-    return null;
-  }
-  if (row.project_id !== projectId) {
-    fail(reply, 'PROJECT_NOT_FOUND', 'Project not found for this key.');
-    return null;
-  }
-  if (!row.scopes.includes(scope)) {
-    fail(reply, 'FORBIDDEN_SCOPE', `This key does not grant ${scope}.`);
-    return null;
-  }
-  await pool.query('UPDATE api_keys SET last_used_at=now() WHERE id=$1', [row.id]);
-  return { keyId: row.id, projectId: row.project_id, scopes: row.scopes };
-}
-
-async function projectOwned(pool: pg.Pool, projectId: string, ownerId: string): Promise<Record<string, unknown> | null> {
-  const result = await pool.query('SELECT * FROM projects WHERE id=$1 AND owner_id=$2', [projectId, ownerId]);
-  return result.rows[0] ?? null;
-}
-
-async function responseMeta(pool: pg.Pool, projectId: string) {
-  const [fingerprint, checkpoints] = await Promise.all([
-    pool.query(`SELECT id, genesis_hash, evm_chain_id::text, last_verified_at FROM network_fingerprints WHERE network_id='portaldot-v3-testnet' AND status='active' LIMIT 1`),
-    pool.query(
-      `SELECT s.id AS source_id, s.start_block::text, s.end_block::text, c.block_number::text, c.block_hash, c.committed_at
-         FROM indexer_sources s LEFT JOIN indexer_checkpoints c ON c.source_id=s.id
-        WHERE s.project_id=$1 ORDER BY s.created_at`,
-      [projectId],
-    ),
-  ]);
-  const fp = fingerprint.rows[0] ?? null;
-  return {
-    networkId: 'portaldot-v3-testnet',
-    networkFingerprint: fp ? `${fp.genesis_hash}:${fp.evm_chain_id}` : null,
-    chainLayer: 'evm' as const,
-    observedAt: new Date().toISOString(),
-    checkpoint: checkpoints.rows.find((row: { block_number?: string | null }) => row.block_number) ?? null,
-    coverage: checkpoints.rows
-      .filter((row: { block_number?: string | null }) => row.block_number)
-      .map((row: { source_id: string; start_block: string; block_number: string }) => ({ sourceId: row.source_id, fromBlock: row.start_block, toBlock: row.block_number, status: 'complete' as const })),
-    finalityPolicy: 'included-with-explicit-finality' as const,
-    finality: 'unknown' as const,
-  };
-}
-
-export async function buildServer(pool = createPool()): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024, trustProxy: false });
+export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {}): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: process.env.NODE_ENV === 'test' ? false : { redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-csrf-token"]'] },
+    bodyLimit: 3 * 1024 * 1024,
+    trustProxy: process.env.API_TRUST_PROXY === '1',
+    genReqId: () => `req_${randomToken(9)}`,
+  });
   await app.register(cookie);
   await app.register(cors, { origin: process.env.WEB_ORIGIN ?? 'http://127.0.0.1:3000', credentials: true });
-  await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    max: Number(process.env.API_RATE_LIMIT_PER_MINUTE ?? 120),
+    timeWindow: '1 minute',
+    errorResponseBuilder: (request, context) => {
+      request.pdErrorCode = 'RATE_LIMITED';
+      return { statusCode: 429, error: { code: 'RATE_LIMITED', message: `Too many requests. Retry after ${Math.ceil(context.ttl / 1000)} s.`, requestId: request.id } };
+    },
+  });
+  registerRequestLogging(app, pool);
 
   app.get('/health', async () => {
     const db = await pool.query('SELECT now() AS now');
@@ -395,130 +288,16 @@ export async function buildServer(pool = createPool()): Promise<FastifyInstance>
     return { data: result.rows[0] };
   });
 
-  async function readList(request: FastifyRequest, reply: FastifyReply, resource: 'contracts' | 'transactions' | 'indexer') {
-    const projectId = stringParam((request.params as Record<string, unknown>).projectId);
-    const scope = `${resource}:read` as ReadScope;
-    if (!(await keyAuth(pool, request, reply, projectId, scope))) return;
-    const query = (request.query ?? {}) as Record<string, unknown>;
-    let limit: number;
-    try {
-      limit = requestedLimit(query);
-    } catch (error) {
-      return fail(reply, 'INVALID_QUERY', (error as Error).message);
-    }
-    const filterHash = normalizedFilterHash(query);
-    let snapshot = new Date().toISOString();
-    let after: string[] = [];
-    if (typeof query.cursor === 'string') {
-      try {
-        const decoded = decodeCursor(query.cursor, { resource, projectId, filterHash }, CURSOR_SECRET);
-        snapshot = decoded.snapshot;
-        after = decoded.after;
-      } catch (error) {
-        return fail(reply, 'CURSOR_RESTART_REQUIRED', (error as Error).message);
-      }
-    }
-    const table = resource === 'indexer' ? 'indexer_sources' : resource;
-    const fields =
-      resource === 'contracts'
-        ? 'id,name,address,source,deploy_tx_hash,deploy_block::text,code_observed,created_at'
-        : resource === 'transactions'
-          ? 'id,contract_id,origin,kind,hash,from_address,to_address,value_raw::text,submission_status,inclusion_status,execution_status,finality_status,indexing_status,block_number::text,block_hash,gas_used::text,effective_gas_price::text,fee_raw::text,created_at,updated_at'
-          : 'id,contract_id,contract_address,event_names,start_block::text,end_block::text,desired_state,status,generation::text,last_error,latest_observed_block::text,latest_observed_at,created_at,updated_at';
-    const conditions = ['project_id=$1', 'created_at <= $2'];
-    const values: unknown[] = [projectId, snapshot];
-    if (resource === 'contracts') conditions.push('removed_at IS NULL');
-    if (after.length) {
-      if (after.length !== 2) return fail(reply, 'CURSOR_RESTART_REQUIRED', 'Cursor position is invalid.');
-      values.push(after[0], after[1]);
-      conditions.push(`(created_at,id) < ($${values.length - 1}::timestamptz,$${values.length}::uuid)`);
-    }
-    values.push(limit + 1);
-    const result = await pool.query(`SELECT ${fields} FROM ${table} WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC,id DESC LIMIT $${values.length}`, values);
-    const hasMore = result.rows.length > limit;
-    const data = result.rows.slice(0, limit);
-    const last = data.at(-1);
-    const nextCursor =
-      hasMore && last
-        ? encodeCursor({ resource, projectId, filterHash, snapshot, after: [new Date(last.created_at).toISOString(), last.id] }, CURSOR_SECRET)
-        : null;
-    return { requestId: request.id, data, nextCursor, meta: await responseMeta(pool, projectId) };
-  }
-
-  app.get('/v1/projects/:projectId/contracts', (request, reply) => readList(request, reply, 'contracts'));
-  app.get('/v1/projects/:projectId/transactions', (request, reply) => readList(request, reply, 'transactions'));
-  app.get('/v1/projects/:projectId/indexer', (request, reply) => readList(request, reply, 'indexer'));
-
-  app.get('/v1/projects/:projectId/events', async (request, reply) => {
-    const projectId = stringParam((request.params as Record<string, unknown>).projectId);
-    if (!(await keyAuth(pool, request, reply, projectId, 'events:read'))) return;
-    const query = (request.query ?? {}) as Record<string, unknown>;
-    let limit: number;
-    let fromBlock: string | null;
-    let toBlock: string | null;
-    try {
-      limit = requestedLimit(query);
-      fromBlock = exactDecimal(query.fromBlock, 'fromBlock');
-      toBlock = exactDecimal(query.toBlock, 'toBlock');
-      if (fromBlock && toBlock && BigInt(toBlock) < BigInt(fromBlock)) throw new Error('toBlock must be greater than or equal to fromBlock');
-    } catch (error) {
-      return fail(reply, 'INVALID_QUERY', (error as Error).message);
-    }
-    const filterHash = normalizedFilterHash(query);
-    let snapshot: string;
-    let after: string[] = [];
-    if (typeof query.cursor === 'string') {
-      try {
-        const decoded = decodeCursor(query.cursor, { resource: 'events', projectId, filterHash }, CURSOR_SECRET);
-        snapshot = decoded.snapshot;
-        after = decoded.after;
-      } catch (error) {
-        return fail(reply, 'CURSOR_RESTART_REQUIRED', (error as Error).message);
-      }
-    } else {
-      snapshot = (await pool.query('SELECT COALESCE(max(seq),0)::text AS snapshot FROM raw_logs WHERE project_id=$1 AND canonical=true', [projectId])).rows[0].snapshot;
-    }
-    const conditions = ['r.project_id=$1', 'r.canonical=true', 'r.seq <= $2::bigint'];
-    const values: unknown[] = [projectId, snapshot];
-    if (after.length) {
-      if (after.length !== 1 || !/^[0-9]+$/.test(after[0])) return fail(reply, 'CURSOR_RESTART_REQUIRED', 'Cursor position is invalid.');
-      values.push(after[0]);
-      conditions.push(`r.seq < $${values.length}::bigint`);
-    }
-    if (fromBlock) {
-      values.push(fromBlock);
-      conditions.push(`r.block_number >= $${values.length}::bigint`);
-    }
-    if (toBlock) {
-      values.push(toBlock);
-      conditions.push(`r.block_number <= $${values.length}::bigint`);
-    }
-    if (typeof query.contract === 'string' && query.contract) {
-      values.push(query.contract.toLowerCase());
-      conditions.push(`lower(r.contract_address)=$${values.length}`);
-    }
-    if (typeof query.event === 'string' && query.event) {
-      values.push(query.event);
-      conditions.push(`(d.event_name=$${values.length} OR d.event_signature=$${values.length})`);
-    }
-    values.push(limit + 1);
-    const result = await pool.query(
-      `SELECT r.seq::text,r.source_id,r.contract_address,r.block_number::text,r.block_hash,r.transaction_hash,r.transaction_index,r.log_index,r.topics,r.data,r.indexed_at,
-              d.status AS decode_status,d.event_name,d.event_signature,d.args,d.decode_error
-         FROM raw_logs r LEFT JOIN decoded_events d ON d.raw_log_id=r.id
-        WHERE ${conditions.join(' AND ')} ORDER BY r.seq DESC LIMIT $${values.length}`,
-      values,
-    );
-    const hasMore = result.rows.length > limit;
-    const data = result.rows.slice(0, limit);
-    const last = data.at(-1);
-    const nextCursor = hasMore && last ? encodeCursor({ resource: 'events', projectId, filterHash, snapshot, after: [last.seq] }, CURSOR_SECRET) : null;
-    return { requestId: request.id, data, nextCursor, meta: await responseMeta(pool, projectId) };
-  });
+  registerV1(app, pool);
+  registerWorkspace(app, pool, deps);
 
   app.setErrorHandler((error, request, reply) => {
-    request.log.error({ err: error }, 'request failed');
     if (reply.sent) return;
+    const status = (error as { statusCode?: number }).statusCode;
+    if (status === 429) return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: (error as Error).message, requestId: request.id } });
+    if (status === 413) return fail(reply, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
+    if (status === 400 || (error as { code?: string }).code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE') return fail(reply, 'INVALID_REQUEST', 'The request body could not be parsed.');
+    request.log.error({ err: error }, 'request failed');
     fail(reply, 'INTERNAL', 'The request could not be completed.', request.id);
   });
   return app;

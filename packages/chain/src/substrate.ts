@@ -28,6 +28,23 @@ export interface AccountMapping {
   method: 'reviveApi.accountId';
 }
 
+export interface StorageDepositEstimate {
+  status: 'estimated';
+  kind: 'charge' | 'refund';
+  amountRaw: string;
+  unit: 'native base units';
+  method: string;
+  blockHash: string;
+  specVersion: string;
+  weightRequired: unknown;
+  dispatchOk: boolean;
+}
+
+export interface UnavailableEstimate {
+  status: 'unavailable';
+  reason: string;
+}
+
 type CodecLike = {
   isSome?: boolean;
   unwrap?: () => CodecLike;
@@ -130,5 +147,66 @@ export class SubstrateAdapter {
       specVersion: runtime.specVersion.toString(),
       method: 'reviveApi.accountId',
     };
+  }
+
+  /**
+   * Dry-run a Revive call or instantiation through the runtime API exposed by
+   * current metadata and read the storage deposit it reports. Parameters are
+   * mapped by name; an unrecognized signature yields "unavailable" rather than
+   * a guessed encoding.
+   */
+  async dryRunStorageDeposit(req: {
+    kind: 'call' | 'instantiate';
+    originAccountHex: string;
+    dest?: string;
+    input: string;
+    code?: string;
+  }): Promise<StorageDepositEstimate | UnavailableEstimate> {
+    try {
+      const blockHash = (await this.api.rpc.chain.getFinalizedHead()).toHex();
+      const at = await this.api.at(blockHash);
+      const runtime = await this.api.rpc.state.getRuntimeVersion(blockHash);
+      const calls = at.call as unknown as Record<string, Record<string, ((...args: unknown[]) => Promise<{ toJSON(): unknown }>) & { meta?: { params?: Array<{ name: { toString(): string } }> } }>>;
+      const fn = calls.reviveApi?.[req.kind];
+      if (typeof fn !== 'function') return { status: 'unavailable', reason: `The connected runtime does not expose reviveApi.${req.kind} in its metadata.` };
+      const names = (fn.meta?.params ?? []).map((p) => p.name.toString().replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()));
+      if (!names.length) return { status: 'unavailable', reason: `reviveApi.${req.kind} parameter metadata is unavailable.` };
+      const byName: Record<string, unknown> = {
+        origin: req.originAccountHex,
+        dest: req.dest,
+        value: 0,
+        gasLimit: null,
+        storageDepositLimit: null,
+        inputData: req.input,
+        data: req.input,
+        code: req.code ? { Upload: req.code } : undefined,
+        salt: null,
+      };
+      const args: unknown[] = [];
+      for (const n of names) {
+        if (!(n in byName) || byName[n] === undefined) return { status: 'unavailable', reason: `reviveApi.${req.kind} has an unrecognized parameter "${n}" (runtime ${runtime.specVersion.toString()}).` };
+        args.push(byName[n]);
+      }
+      const out = (await fn(...args)).toJSON() as Record<string, any>;
+      const sd = out?.storageDeposit ?? out?.storage_deposit;
+      const kind = sd && ('charge' in sd || 'Charge' in sd) ? 'charge' : sd && ('refund' in sd || 'Refund' in sd) ? 'refund' : null;
+      if (!kind) return { status: 'unavailable', reason: 'The dry-run result did not include a storage deposit field.' };
+      const raw = sd.charge ?? sd.Charge ?? sd.refund ?? sd.Refund;
+      const amountRaw = typeof raw === 'string' && raw.startsWith('0x') ? BigInt(raw).toString() : BigInt(String(raw)).toString();
+      const result = out?.result ?? {};
+      return {
+        status: 'estimated',
+        kind,
+        amountRaw,
+        unit: 'native base units',
+        method: `reviveApi.${req.kind}`,
+        blockHash,
+        specVersion: runtime.specVersion.toString(),
+        weightRequired: out?.weightRequired ?? out?.gasRequired ?? null,
+        dispatchOk: 'ok' in result || 'Ok' in result,
+      };
+    } catch (e) {
+      return { status: 'unavailable', reason: `Dry run failed: ${(e as Error).message.split('\n')[0]}` };
+    }
   }
 }
