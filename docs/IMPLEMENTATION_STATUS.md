@@ -19,18 +19,23 @@ Status vocabulary: **Not started**, **In progress**, **Implemented**, **Tested**
 | Project read-key lifecycle | Tested | Local acceptance created a scoped expiring key, returned its secret once, and called a real read route. Metadata listing and revocation exist. Replacement flow is not implemented. |
 | Read API | Tested | Contracts/transactions/events/indexer endpoints authorize by project and scope. Limits are bounded; exact values remain strings; signed cursors bind project/filter/snapshot. Local empty-contract response passed. Request logging and full filter coverage remain. |
 | Network monitor worker | Tested | Worker heartbeat and persisted identity probes run locally. Current health is degraded because both upstream RPC probes fail. The worker is not an event indexer yet. |
+| Web visual system and responsive shell | Tested | The supplied landing/dashboard exports were ported to Next.js with their dark tokens, typography, navigation, desktop sidebar, and mobile drawer. Desktop and mobile Playwright projects pass. |
+| Web owner, project, and overview flows | Tested | Login/session bootstrap, project search/filter/create, project switching, and persisted overview metrics are connected to workspace APIs. Loading, empty, error, and unauthorized states are present. |
+| Web key and network flows | Tested | Key creation displays the secret once; metadata listing/revocation, probe history, active fingerprint, and worker health use live API responses. No sample chain records are substituted. |
 | Event indexer/reorg recovery | Not started | Schema is present; fetch, lease/fencing commit loop, ancestry rollback, decoding, and recovery tests are not implemented. |
 | Contract import/deploy/read/write | Not started | Chain reads and schema foundations exist; browser-wallet approval flows and contract routes do not. |
 | Contract artifacts | Not started | Reproducible Storage/ERC-20/ERC-721 builds and provenance have not been added. |
-| Web application | Not started | The supplied design exports/content kit remain reference material; no Next.js app has been ported yet. |
+| Remaining dashboard workflows | In progress | Routes for contracts, transactions, indexer, monitoring, activity, and settings preserve the navigation model but deliberately show not-connected states until their backend slices exist. |
 | OpenAPI | Not started | Packet draft has not been reconciled with the implemented routes. |
 | Live wallet acceptance | Blocked | Requires reachable RPCs, compiler compatibility, a human-funded testnet wallet, and human approval. No address or transaction evidence has been fabricated. |
 
 ## Latest automated verification
 
 ```text
-pnpm typecheck: passed (shared, db, chain, api, worker)
+pnpm typecheck: passed (shared, db, chain, api, worker, web)
 pnpm test: 4 files, 10 tests passed
+pnpm --filter @palletdock/web build: passed; 10 routes generated
+Playwright: 4 tests passed across desktop Chrome and mobile Chrome profiles
 pnpm db:migrate: applied 0001_init.sql; repeat run up to date
 local API acceptance: health, login, CSRF project create, one-time key create, authenticated empty contracts response passed
 worker runtime: heartbeat started; EVM/native health reported unavailable without activating a fingerprint

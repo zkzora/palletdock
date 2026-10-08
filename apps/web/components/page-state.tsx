@@ -1,0 +1,4 @@
+import { AlertCircle, Inbox } from 'lucide-react';
+export function LoadingCards(){return <div aria-busy="true" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12}}>{Array.from({length:4}).map((_,i)=><div className="skeleton" key={i} style={{height:128}} />)}</div>}
+export function ErrorState({message,retry}:{message:string;retry():void}){return <div className="notice error"><AlertCircle size={18} aria-hidden="true"/><div><strong>Data could not be loaded</strong><p style={{margin:'4px 0 12px'}}>{message}</p><button className="button secondary" onClick={retry}>Try again</button></div></div>}
+export function EmptyState({title,body,action}:{title:string;body:string;action?:React.ReactNode}){return <section className="empty-state"><Inbox size={28} aria-hidden="true"/><div><h2>{title}</h2><p>{body}</p></div>{action}</section>}

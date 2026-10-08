@@ -21,6 +21,7 @@ import {
   apiKeyCreateSchema,
   projectCreateSchema,
   projectUpdateSchema,
+  resolveNetwork,
   type ErrorCode,
   type ReadScope,
 } from '@palletdock/shared';
@@ -221,8 +222,84 @@ export async function buildServer(pool = createPool()): Promise<FastifyInstance>
   app.get('/workspace/projects', async (request, reply) => {
     const auth = await sessionAuth(pool, request, reply);
     if (!auth) return;
-    const result = await pool.query('SELECT id,name,description,network_id,archived_at,created_at,updated_at FROM projects WHERE owner_id=$1 ORDER BY updated_at DESC,id DESC', [auth.ownerId]);
+    const result = await pool.query(
+      `SELECT p.id,p.name,p.description,p.network_id,p.archived_at,p.created_at,p.updated_at,
+              (SELECT count(1)::int FROM contracts c WHERE c.project_id=p.id AND c.removed_at IS NULL) AS contract_count,
+              (SELECT count(1)::int FROM api_keys k WHERE k.project_id=p.id AND k.revoked_at IS NULL AND k.expires_at > now()) AS active_key_count,
+              COALESCE((SELECT s.status FROM indexer_sources s WHERE s.project_id=p.id ORDER BY s.updated_at DESC LIMIT 1),'not_configured') AS indexer_status
+         FROM projects p WHERE p.owner_id=$1 ORDER BY p.updated_at DESC,p.id DESC`,
+      [auth.ownerId],
+    );
     return { data: result.rows };
+  });
+
+  app.get('/workspace/projects/:projectId/overview', async (request, reply) => {
+    const auth = await sessionAuth(pool, request, reply);
+    if (!auth) return;
+    const projectId = stringParam((request.params as Record<string, unknown>).projectId);
+    const project = await projectOwned(pool, projectId, auth.ownerId);
+    if (!project) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
+    const [counts, source, transactions, events] = await Promise.all([
+      pool.query(
+        `SELECT
+          (SELECT count(1)::int FROM contracts WHERE project_id=$1 AND removed_at IS NULL) AS contracts,
+          (SELECT count(1)::int FROM transactions WHERE project_id=$1) AS transactions,
+          (SELECT count(1)::int FROM transactions WHERE project_id=$1 AND execution_status='reverted') AS failed_transactions,
+          (SELECT count(1)::int FROM raw_logs WHERE project_id=$1 AND canonical=true) AS indexed_events,
+          (SELECT count(1)::int FROM api_keys WHERE project_id=$1 AND revoked_at IS NULL AND expires_at > now()) AS active_keys`,
+        [projectId],
+      ),
+      pool.query(
+        `SELECT s.id,s.status,s.start_block::text,s.latest_observed_block::text,s.latest_observed_at,s.last_error,
+                c.block_number::text AS checkpoint_block,c.block_hash AS checkpoint_hash,c.committed_at AS checkpoint_at
+           FROM indexer_sources s LEFT JOIN indexer_checkpoints c ON c.source_id=s.id
+          WHERE s.project_id=$1 ORDER BY s.updated_at DESC LIMIT 1`,
+        [projectId],
+      ),
+      pool.query(
+        `SELECT id,hash,kind,function_name,submission_status,inclusion_status,execution_status,created_at
+           FROM transactions WHERE project_id=$1 ORDER BY created_at DESC LIMIT 5`,
+        [projectId],
+      ),
+      pool.query(
+        `SELECT r.seq::text,r.block_number::text,r.transaction_hash,d.event_name,d.status,r.indexed_at
+           FROM raw_logs r LEFT JOIN decoded_events d ON d.raw_log_id=r.id
+          WHERE r.project_id=$1 AND r.canonical=true ORDER BY r.seq DESC LIMIT 5`,
+        [projectId],
+      ),
+    ]);
+    return { data: { project, counts: counts.rows[0], indexer: source.rows[0] ?? null, transactions: transactions.rows, events: events.rows } };
+  });
+
+  app.get('/workspace/network', async (request, reply) => {
+    const auth = await sessionAuth(pool, request, reply);
+    if (!auth) return;
+    const config = resolveNetwork();
+    const [probes, fingerprint, workers] = await Promise.all([
+      pool.query(`SELECT DISTINCT ON (target) target,status,method,latency_ms,result,error,observed_at FROM rpc_probes WHERE network_id=$1 ORDER BY target,observed_at DESC`, [config.networkId]),
+      pool.query(`SELECT id,status,genesis_hash,evm_chain_id::text,evm_genesis_hash,spec_name,spec_version::text,ss58_format,token_symbol,token_decimals,last_verified_at FROM network_fingerprints WHERE network_id=$1 ORDER BY last_verified_at DESC LIMIT 1`, [config.networkId]),
+      pool.query(`SELECT worker_id,started_at,last_seen_at,info,now()-last_seen_at < interval '30 seconds' AS healthy FROM worker_heartbeats ORDER BY last_seen_at DESC LIMIT 10`),
+    ]);
+    return {
+      data: {
+        config: {
+          networkId: config.networkId,
+          name: config.name,
+          environment: config.environment,
+          evmRpcUrl: config.evmRpcUrl,
+          substrateRpcUrl: config.substrateRpcUrl,
+          evmChainId: config.evmChainId,
+          evmChainIdHex: config.evmChainIdHex,
+          nativeTokenSymbol: config.nativeTokenSymbol,
+          nativeTokenDecimals: config.nativeTokenDecimals,
+          ss58Format: config.ss58Format,
+          nodeConsoleUrl: config.nodeConsoleUrl,
+        },
+        probes: probes.rows,
+        fingerprint: fingerprint.rows[0] ?? null,
+        workers: workers.rows,
+      },
+    };
   });
 
   app.post('/workspace/projects', async (request, reply) => {
