@@ -16,24 +16,14 @@ export const PORTALDOT_CHAIN = {
   nativeCurrency: { name: 'tPOTv3', symbol: 'tPOTv3', decimals: 18 },
 };
 
-interface Eip1193 {
-  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
-  on?(event: string, fn: (...args: any[]) => void): void;
-  removeListener?(event: string, fn: (...args: any[]) => void): void;
-}
-
 declare global {
   interface Window {
     ethereum?: Eip1193;
   }
 }
 
-export type SendOutcome =
-  | { outcome: 'submitted'; hash: string }
-  | { outcome: 'rejected'; error: string }
-  | { outcome: 'wrong_network'; error: string }
-  | { outcome: 'failed_before_broadcast'; error: string }
-  | { outcome: 'unknown'; error: string; late?: Promise<string | null> };
+import { sendWithProvider, type Eip1193, type SendOutcome } from './wallet-core';
+export type { SendOutcome } from './wallet-core';
 
 interface WalletValue {
   available: boolean;
@@ -136,48 +126,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return now === PORTALDOT_CHAIN.chainIdHex;
   }, [provider]);
 
-  const send = useCallback<WalletValue['send']>(
-    async (tx, timeoutMs = 180_000) => {
-      if (!provider) return { outcome: 'failed_before_broadcast', error: 'No browser wallet is available.' };
-      // Re-read the chain right before signing; never trust cached state.
-      let current: string;
-      try {
-        current = String(await provider.request({ method: 'eth_chainId' })).toLowerCase();
-      } catch (e) {
-        return { outcome: 'failed_before_broadcast', error: errMessage(e) };
-      }
-      if (current !== PORTALDOT_CHAIN.chainIdHex) return { outcome: 'wrong_network', error: `Wallet is on chain ${current}; expected ${PORTALDOT_CHAIN.chainIdHex}.` };
-      const accs = (await provider.request({ method: 'eth_accounts' }).catch(() => [])) as string[];
-      if (!accs.map((a) => a.toLowerCase()).includes(tx.from.toLowerCase())) return { outcome: 'failed_before_broadcast', error: 'The reviewed sender is no longer the selected wallet account.' };
-      const params: Record<string, string> = { from: tx.from, data: tx.data, value: tx.value };
-      if (tx.to) params.to = tx.to;
-      const pending = provider.request({ method: 'eth_sendTransaction', params: [params] }) as Promise<string>;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<'timeout'>((r) => (timer = setTimeout(() => r('timeout'), timeoutMs)));
-      try {
-        const r = await Promise.race([pending, timeout]);
-        if (r === 'timeout') {
-          return {
-            outcome: 'unknown',
-            error: `No response from the wallet after ${Math.round(timeoutMs / 1000)} s. The transaction may still be broadcast.`,
-            late: pending.then((h) => (typeof h === 'string' ? h : null)).catch(() => null),
-          };
-        }
-        if (typeof r !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(r)) return { outcome: 'unknown', error: 'The wallet returned an unexpected result instead of a transaction hash.' };
-        return { outcome: 'submitted', hash: r.toLowerCase() };
-      } catch (e) {
-        const code = errCode(e);
-        if (code === 4001) return { outcome: 'rejected', error: 'Rejected in the wallet. Nothing was submitted.' };
-        const msg = errMessage(e);
-        if (/insufficient funds/i.test(msg)) return { outcome: 'failed_before_broadcast', error: `Insufficient funds for value plus fee: ${msg}` };
-        // Any other error after the request reached the wallet is ambiguous.
-        return { outcome: 'unknown', error: msg };
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
-    },
-    [provider],
-  );
+  const send = useCallback<WalletValue['send']>((tx, timeoutMs) => (provider ? sendWithProvider(provider, tx, timeoutMs) : Promise.resolve({ outcome: 'failed_before_broadcast', error: 'No browser wallet is available.' })), [provider]);
 
   const balanceRaw = useCallback(async () => {
     if (!provider || !account) return null;

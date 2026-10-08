@@ -61,6 +61,12 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   });
   registerRequestLogging(app, pool);
 
+  app.get('/openapi.yaml', async (_request, reply) => {
+    const { readFile } = await import('node:fs/promises');
+    const spec = await readFile(new URL('../../../docs/openapi.yaml', import.meta.url), 'utf8');
+    return reply.type('application/yaml; charset=utf-8').send(spec);
+  });
+
   app.get('/health', async () => {
     const db = await pool.query('SELECT now() AS now');
     return { status: 'ok', database: 'connected', observedAt: db.rows[0].now };

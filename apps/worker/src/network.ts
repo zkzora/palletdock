@@ -64,3 +64,42 @@ export async function verifyAndRecordNetwork(pool: pg.Pool): Promise<NetworkVeri
   });
   return { status, fingerprintId, evm, substrate };
 }
+
+export interface ResetPlan {
+  previous: { id: string; genesis_hash: string; evm_chain_id: string } | null;
+  next: { id: string; genesis_hash: string; evm_chain_id: string; last_verified_at: Date } | null;
+  sourcesToStop: number;
+  applied: boolean;
+}
+
+/**
+ * Explicit operator migration after a network reset (changed genesis). Never
+ * called automatically. With apply=false it only reports the plan.
+ */
+export async function acceptNetworkReset(pool: pg.Pool, apply: boolean): Promise<ResetPlan> {
+  const [active, mismatch] = await Promise.all([
+    pool.query(`SELECT id, genesis_hash, evm_chain_id::text FROM network_fingerprints WHERE network_id='portaldot-v3-testnet' AND status='active'`),
+    pool.query(`SELECT id, genesis_hash, evm_chain_id::text, last_verified_at FROM network_fingerprints WHERE network_id='portaldot-v3-testnet' AND status='mismatch' ORDER BY last_verified_at DESC LIMIT 1`),
+  ]);
+  const previous = active.rows[0] ?? null;
+  const next = mismatch.rows[0] ?? null;
+  const sourcesToStop = previous ? (await pool.query(`SELECT count(*)::int AS n FROM indexer_sources WHERE fingerprint_id=$1 AND desired_state <> 'deleted'`, [previous.id])).rows[0].n : 0;
+  if (!next || !apply) return { previous, next, sourcesToStop, applied: false };
+  await withTx(pool, async (c) => {
+    if (previous) {
+      await c.query(`UPDATE network_fingerprints SET status='superseded', superseded_at=now() WHERE id=$1`, [previous.id]);
+      await c.query(
+        `UPDATE indexer_sources SET status='recovery_required', desired_state='paused', generation=generation+1, reorg_epoch=reorg_epoch+1,
+                last_error='Network reset accepted: this source belongs to a superseded network identity.', last_error_at=now(), updated_at=now()
+          WHERE fingerprint_id=$1 AND desired_state <> 'deleted'`,
+        [previous.id],
+      );
+      await c.query(`UPDATE account_mappings SET invalidated_at=now() WHERE fingerprint_id=$1 AND invalidated_at IS NULL`, [previous.id]);
+    }
+    await c.query(`UPDATE network_fingerprints SET status='active' WHERE id=$1`, [next.id]);
+    await c.query(`INSERT INTO ops_logs(source,level,message,detail) VALUES ('network','WARN','Network reset accepted by operator',$1)`, [
+      JSON.stringify({ previous: previous?.genesis_hash ?? null, current: next.genesis_hash, sourcesStopped: sourcesToStop }),
+    ]);
+  });
+  return { previous, next, sourcesToStop, applied: true };
+}

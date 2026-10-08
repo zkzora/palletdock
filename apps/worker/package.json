@@ -7,7 +7,8 @@
     "dev": "tsx watch src/worker.ts",
     "start": "tsx src/worker.ts",
     "network:verify": "tsx src/network-verify.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "network:accept-reset": "tsx src/network-reset.ts"
   },
   "dependencies": {
     "@palletdock/chain": "workspace:*",

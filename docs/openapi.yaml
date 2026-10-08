@@ -1,0 +1,353 @@
+openapi: 3.1.0
+info:
+  title: PalletDock Project Read API
+  version: 1.0.0
+  description: >-
+    Project-scoped, read-only API for EVM records indexed by a PalletDock
+    deployment on Portaldot V3 Testnet. Served by apps/api (see /v1 routes in
+    apps/api/src/v1.ts). The host is your deployment's API URL; this file does
+    not advertise a public hosted service. Exact integers are decimal strings.
+    Finality is always "unknown" until a verified finality adapter exists.
+servers:
+  - url: '{apiBase}'
+    description: Your PalletDock API base URL (for example http://127.0.0.1:4100 or https://your-host/backend)
+    variables:
+      apiBase:
+        default: http://127.0.0.1:4100
+security:
+  - ProjectReadKey: []
+paths:
+  /v1/projects/{projectId}/events:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listEvents
+      summary: List indexed EVM logs (decoded when possible) in chain order
+      x-required-scope: events:read
+      parameters:
+        - name: contract
+          in: query
+          schema: { $ref: '#/components/schemas/Address' }
+        - name: event
+          in: query
+          description: Event name or full signature, e.g. NumberChanged or NumberChanged(address,uint256,uint256)
+          schema: { type: string, maxLength: 200 }
+        - name: fromBlock
+          in: query
+          schema: { $ref: '#/components/schemas/UnsignedIntegerString' }
+        - name: toBlock
+          in: query
+          schema: { $ref: '#/components/schemas/UnsignedIntegerString' }
+        - name: finality
+          in: query
+          description: '"finalized" always returns an empty page with a note, because no record is proven finalized.'
+          schema: { type: string, enum: [unknown, finalized] }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Page of events
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Event' } }
+        '400': { $ref: '#/components/responses/InvalidQuery' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenScope' }
+        '404': { $ref: '#/components/responses/ProjectNotFound' }
+        '409': { $ref: '#/components/responses/CursorRestartRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/projects/{projectId}/transactions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listTransactions
+      summary: List transactions submitted through PalletDock or registered by hash (newest first)
+      x-required-scope: transactions:read
+      parameters:
+        - name: executionStatus
+          in: query
+          schema: { type: string, enum: [success, reverted, unknown] }
+        - name: inclusionStatus
+          in: query
+          schema: { type: string, enum: [not_observed, pending, included, reorged_out] }
+        - name: contract
+          in: query
+          schema: { $ref: '#/components/schemas/Address' }
+        - name: hash
+          in: query
+          schema: { $ref: '#/components/schemas/Hash' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Page of transactions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Transaction' } }
+                      meta:
+                        type: object
+                        properties:
+                          scope: { type: string }
+        '400': { $ref: '#/components/responses/InvalidQuery' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenScope' }
+        '404': { $ref: '#/components/responses/ProjectNotFound' }
+        '409': { $ref: '#/components/responses/CursorRestartRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/projects/{projectId}/contracts:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listContracts
+      summary: List contracts tracked by the project (oldest first)
+      x-required-scope: contracts:read
+      parameters:
+        - name: address
+          in: query
+          schema: { $ref: '#/components/schemas/Address' }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Page of contracts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Contract' } }
+        '400': { $ref: '#/components/responses/InvalidQuery' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenScope' }
+        '404': { $ref: '#/components/responses/ProjectNotFound' }
+        '409': { $ref: '#/components/responses/CursorRestartRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+  /v1/projects/{projectId}/indexer:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: getIndexer
+      summary: Indexer sources with checkpoint, coverage, lag, and status (single page)
+      x-required-scope: indexer:read
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Indexer sources
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/IndexerSource' } }
+        '400': { $ref: '#/components/responses/InvalidQuery' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/ForbiddenScope' }
+        '404': { $ref: '#/components/responses/ProjectNotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+components:
+  securitySchemes:
+    ProjectReadKey:
+      type: http
+      scheme: bearer
+      description: Project read key (pd_live_<prefix>.<secret>). Shown once at creation; only a hash is stored. Never send it in a URL.
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: string, pattern: '^[0-9]{1,3}$', default: '25' }
+      description: 1–100
+    Cursor:
+      name: cursor
+      in: query
+      description: >-
+        Opaque, signed cursor returned as nextCursor. Bound to project, resource,
+        filters, network fingerprint, and the snapshot (events also bind the
+        reorg epoch). Changing filters or a rollback returns 409.
+      schema: { type: string }
+  responses:
+    InvalidQuery: { description: Invalid or unsupported filter, range, or limit, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    Unauthorized: { description: Missing, invalid, expired, or revoked key, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    ForbiddenScope: { description: Key lacks the required scope, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    ProjectNotFound: { description: Project missing or not accessible with this key, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    CursorRestartRequired: { description: Snapshot invalidated (filters, rollback, reindex, or network reset); restart without a cursor, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    RateLimited: { description: Too many requests, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    Internal: { description: Request could not be completed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  schemas:
+    UnsignedIntegerString: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
+    NullableIntegerString: { type: [string, 'null'], pattern: '^(0|[1-9][0-9]*)$' }
+    Address: { type: string, pattern: '^0x[0-9a-fA-F]{40}$' }
+    Hash: { type: string, pattern: '^0x[0-9a-fA-F]{64}$' }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string, enum: [INVALID_QUERY, UNAUTHORIZED, FORBIDDEN_SCOPE, PROJECT_NOT_FOUND, CURSOR_RESTART_REQUIRED, RATE_LIMITED, SERVICE_UNAVAILABLE, INTERNAL] }
+            message: { type: string }
+            requestId: { type: string }
+    Meta:
+      type: object
+      required: [networkId, chainLayer, observedAt, coverage, finalityPolicy, finality]
+      properties:
+        networkId: { const: portaldot-v3-testnet }
+        networkFingerprint:
+          type: [object, 'null']
+          properties:
+            id: { type: string, format: uuid }
+            genesisHash: { type: string }
+            evmChainId: { $ref: '#/components/schemas/UnsignedIntegerString' }
+            lastVerifiedAt: { type: string, format: date-time }
+        chainLayer: { const: evm }
+        observedAt: { type: string, format: date-time, description: Server time when the response was produced }
+        checkpoint:
+          type: [object, 'null']
+          properties:
+            sourceId: { type: string, format: uuid }
+            blockNumber: { $ref: '#/components/schemas/UnsignedIntegerString' }
+            blockHash: { $ref: '#/components/schemas/Hash' }
+            committedAt: { type: string, format: date-time }
+        coverage:
+          type: array
+          items:
+            type: object
+            properties:
+              sourceId: { type: string, format: uuid }
+              contractAddress: { type: string }
+              requested: { type: object, properties: { fromBlock: { $ref: '#/components/schemas/UnsignedIntegerString' }, toBlock: { $ref: '#/components/schemas/NullableIntegerString' } } }
+              completed: { type: [object, 'null'] }
+              status: { type: string }
+              latestObservedBlock: { $ref: '#/components/schemas/NullableIntegerString' }
+              latestObservedAt: { type: [string, 'null'], format: date-time }
+              lagBlocks: { $ref: '#/components/schemas/NullableIntegerString' }
+        finalityPolicy: { const: included-with-explicit-finality }
+        finality: { const: unknown }
+        finalityNote: { type: string }
+    ListEnvelope:
+      type: object
+      required: [requestId, data, nextCursor, meta]
+      properties:
+        requestId: { type: string }
+        data: { type: array }
+        nextCursor: { type: [string, 'null'], description: null means no next page in this snapshot, not that no future records can appear }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Event:
+      type: object
+      required: [id, networkId, contractAddress, blockNumber, blockHash, transactionHash, transactionIndex, logIndex, topics, data, decodeStatus, finality]
+      properties:
+        id: { type: string, format: uuid }
+        networkId: { type: string }
+        chainLayer: { const: evm }
+        contractAddress: { type: string }
+        blockNumber: { $ref: '#/components/schemas/UnsignedIntegerString' }
+        blockHash: { $ref: '#/components/schemas/Hash' }
+        transactionHash: { $ref: '#/components/schemas/Hash' }
+        transactionIndex: { type: integer }
+        logIndex: { type: integer }
+        topics: { type: array, items: { type: string } }
+        data: { type: string }
+        decodeStatus: { type: string, enum: [decoded, unknown_event, decode_error, not_decoded] }
+        event:
+          type: [object, 'null']
+          properties:
+            name: { type: string }
+            signature: { type: string }
+            args: { type: object, description: Decoded arguments; integers are decimal strings }
+        decodeError: { type: [string, 'null'] }
+        abiVersion: { type: [integer, 'null'] }
+        indexedAt: { type: string, format: date-time }
+        sourceId: { type: string, format: uuid }
+        finality: { const: unknown }
+    Transaction:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        networkId: { type: string }
+        chainLayer: { const: evm }
+        hash: { $ref: '#/components/schemas/Hash' }
+        origin: { type: string, enum: [palletdock, registered] }
+        kind: { type: string, enum: [deploy, call, unknown] }
+        from: { type: [string, 'null'] }
+        to: { type: [string, 'null'] }
+        contractAddress: { type: [string, 'null'] }
+        function: { type: [string, 'null'] }
+        decodedArgs: {}
+        valueRaw: { $ref: '#/components/schemas/NullableIntegerString' }
+        status:
+          type: object
+          properties:
+            submission: { type: string, enum: [prepared, rejected, submitted, unknown] }
+            inclusion: { type: string, enum: [not_observed, pending, included, reorged_out] }
+            execution: { type: string, enum: [unknown, success, reverted] }
+            finality: { const: unknown }
+            indexing: { type: string, enum: [not_applicable, not_covered, pending, indexed, no_events] }
+        blockNumber: { $ref: '#/components/schemas/NullableIntegerString' }
+        blockHash: { type: [string, 'null'] }
+        gasUsed: { $ref: '#/components/schemas/NullableIntegerString' }
+        effectiveGasPriceRaw: { $ref: '#/components/schemas/NullableIntegerString' }
+        feeRaw: { $ref: '#/components/schemas/NullableIntegerString' }
+        unitNote: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Contract:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        networkId: { type: string }
+        networkGenesisHash: { type: string }
+        name: { type: string }
+        address: { type: string }
+        source: { type: string, enum: [deployed, imported] }
+        deployTransactionHash: { type: [string, 'null'] }
+        deployBlock: { $ref: '#/components/schemas/NullableIntegerString' }
+        abi: { type: [object, 'null'], properties: { version: { type: integer }, sha256: { type: string }, provenance: { type: string }, createdAt: { type: string } } }
+        interface: { const: evm-abi }
+        verificationStatus: { const: unavailable }
+        createdAt: { type: string, format: date-time }
+    IndexerSource:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        contractId: { type: string, format: uuid }
+        contractAddress: { type: string }
+        events: { type: array, items: { type: string } }
+        abiVersion: { type: integer }
+        requestedRange: { type: object }
+        completedRange: { type: [object, 'null'] }
+        checkpoint: { type: [object, 'null'] }
+        latestObservedBlock: { $ref: '#/components/schemas/NullableIntegerString' }
+        latestObservedAt: { type: [string, 'null'] }
+        lagBlocks: { $ref: '#/components/schemas/NullableIntegerString' }
+        desiredState: { type: string, enum: [running, paused, archived] }
+        status: { type: string, enum: [pending, backfilling, following, completed, paused, error, recovery_required, stopped] }
+        reorgEpoch: { $ref: '#/components/schemas/UnsignedIntegerString' }
+        lastError: { type: [string, 'null'] }
+        lastErrorAt: { type: [string, 'null'] }
+        finalityPolicy: { type: string }
+        finality: { const: unknown }

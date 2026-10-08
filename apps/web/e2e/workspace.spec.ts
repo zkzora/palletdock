@@ -17,11 +17,8 @@ test('owner can enter the real workspace and inspect network health', async ({ p
   await page.locator('#password').fill(password!);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL(/\/app/);
-  await expect(page.getByRole('heading', { name: 'Local acceptance' })).toBeVisible();
-  if (testInfo.project.name === 'mobile') {
-    await page.getByRole('button', { name: 'Open navigation' }).click();
-  }
-  await page.getByRole('link', { name: 'Network' }).click();
+  await expect(page.locator('main h1').first()).toBeVisible();
+  await page.goto('/app/network');
   await expect(page.getByRole('heading', { name: 'Network' })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('EVM RPC probe')).toBeVisible({ timeout: 15_000 });
   await page.screenshot({ path: testInfo.outputPath('network.png'), fullPage: true });

@@ -21,7 +21,8 @@
     "build": "pnpm -r build",
     "e2e": "pnpm --filter @palletdock/web e2e",
     "e2e:stack": "tsx scripts/e2e-stack.ts",
-    "e2e:fixture": "pnpm --filter @palletdock/web e2e:fixture"
+    "e2e:fixture": "pnpm --filter @palletdock/web e2e:fixture",
+    "network:accept-reset": "pnpm --filter @palletdock/worker network:accept-reset"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
@@ -32,6 +33,7 @@
     "pg": "^8.16.3",
     "@types/pg": "^8.15.5",
     "@palletdock/db": "workspace:*",
-    "viem": "^2.37.0"
+    "viem": "^2.37.0",
+    "yaml": "^2.8.0"
   }
 }

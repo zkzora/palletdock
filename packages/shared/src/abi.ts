@@ -40,6 +40,34 @@ export class ValidationError extends Error {
 
 const ABI_TYPES = new Set(['function', 'event', 'error', 'constructor', 'fallback', 'receive']);
 
+const ELEMENTARY = /^(address|bool|string|bytes|function|(u?int)(\d*)|bytes(\d+)|(u?fixed)(\d+x\d+)?)$/;
+
+/** Strict Solidity ABI type check (viem does not validate widths). */
+export function isValidAbiType(param: { type?: unknown; components?: unknown }): boolean {
+  if (typeof param?.type !== 'string') return false;
+  let t = param.type;
+  while (/\[\d*\]$/.test(t)) {
+    const m = /\[(\d*)\]$/.exec(t)!;
+    if (m[1] !== '' && (m[1] === '0' || m[1].startsWith('0'))) return false;
+    t = t.slice(0, -m[0].length);
+  }
+  if (t === 'tuple') {
+    const comps = param.components;
+    return Array.isArray(comps) && comps.every((c) => isValidAbiType(c as { type?: unknown }));
+  }
+  const m = ELEMENTARY.exec(t);
+  if (!m) return false;
+  if (m[2] && m[3] !== '') {
+    const bits = Number(m[3]);
+    if (bits < 8 || bits > 256 || bits % 8 !== 0) return false;
+  }
+  if (m[4] !== undefined) {
+    const n = Number(m[4]);
+    if (n < 1 || n > 32) return false;
+  }
+  return true;
+}
+
 /** Validate a JSON ABI array; returns it typed. Throws ValidationError. */
 export function validateAbi(input: unknown): Abi {
   if (!Array.isArray(input)) throw new ValidationError('ABI must be a JSON array.', 'abi');
@@ -55,6 +83,16 @@ export function validateAbi(input: unknown): Abi {
     }
     const inputs = (e as { inputs?: unknown }).inputs;
     if (inputs !== undefined && !Array.isArray(inputs)) throw new ValidationError(`ABI entry ${i} inputs must be an array.`, 'abi');
+    const outputs = (e as { outputs?: unknown }).outputs;
+    for (const [list, label] of [[inputs, 'input'], [outputs, 'output']] as const) {
+      if (list === undefined) continue;
+      if (!Array.isArray(list)) throw new ValidationError(`ABI entry ${i} ${label}s must be an array.`, 'abi');
+      list.forEach((p, j) => {
+        if (!isValidAbiType(p as { type?: unknown })) {
+          throw new ValidationError(`ABI entry ${i} (${String(name ?? t)}) ${label} ${j} has an invalid type "${String((p as { type?: unknown })?.type)}".`, 'abi');
+        }
+      });
+    }
     try {
       if (t === 'function') toFunctionSelector(formatAbiItem(e as AbiFunction));
       if (t === 'event') toEventSelector(formatAbiItem(e as AbiEvent));
