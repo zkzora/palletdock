@@ -51,6 +51,9 @@ export default function LandingPage() {
             <Link href="/docs" className="muted" style={{ textDecoration: 'none' }}>
               Docs
             </Link>
+            <Link href="/faq" className="muted" style={{ textDecoration: 'none' }}>
+              FAQ
+            </Link>
             <Link href="/login" className="button" style={{ minHeight: 34, paddingInline: 14 }}>
               Open workspace
             </Link>
@@ -214,7 +217,7 @@ export default function LandingPage() {
       <footer style={{ borderTop: '1px solid var(--border)' }}>
         <div className="container" style={{ paddingBlock: 24, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', color: 'var(--dim)', fontSize: 12.5 }}>
           <span>
-            PalletDock · independent developer tooling · <Link href="/docs">Docs</Link> · <a href={REPO_URL}>Repository</a>
+            PalletDock · independent developer tooling · <Link href="/docs">Docs</Link> · <Link href="/faq">FAQ</Link> · <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link> · <a href={REPO_URL}>Repository</a>
           </span>
           <span className="mono">Portaldot V3 Testnet · EVM chain 420420777 · Portaldot is not Polkadot</span>
         </div>

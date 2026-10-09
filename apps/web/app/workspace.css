@@ -69,3 +69,8 @@
 .filters .field { gap: 5px; }
 .filters .input { min-height: 36px; }
 @media (max-width: 640px) { .kv > div { grid-template-columns: 1fr; gap: 3px; } .row-link, .row-head { padding-inline: 14px; } }
+
+/* Docs design hover states (PalletDock Docs export) */
+.docs-nav-link:hover { background: #1b1d21 !important; color: #ecedee !important; }
+.docs-card:hover { border-color: #3a3d43 !important; background: #191b1f; }
+.docs-toc-link:hover { color: #ecedee !important; border-left-color: #ecedee !important; }
