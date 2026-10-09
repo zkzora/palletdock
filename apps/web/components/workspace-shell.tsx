@@ -9,7 +9,8 @@ import { api } from '@/lib/api';
 import type { Owner, Project } from '@/lib/types';
 import { WalletProvider, useWallet } from '@/lib/wallet';
 import { shortAddr } from '@/lib/format';
-import { Modal, Notice } from '@/components/ui';
+import { CopyButton, Modal, Notice } from '@/components/ui';
+import { PORTALDOT_ADD_CHAIN_PARAMS } from '@/lib/wallet-core';
 
 interface WorkspaceValue {
   owner: Owner;
@@ -271,8 +272,52 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function NetworkDetails() {
+  const [probe, setProbe] = useState<{ status: string; observed_at: string; error: string | null } | null | undefined>(undefined);
+  useEffect(() => {
+    api<{ data: { probes: Array<{ target: string; status: string; observed_at: string; error: string | null }> } }>('/workspace/network')
+      .then((r) => setProbe(r.data.probes.find((p) => p.target === 'evm') ?? null))
+      .catch(() => setProbe(null));
+  }, []);
+  const rows: Array<[string, string]> = [
+    ['Network name', PORTALDOT_ADD_CHAIN_PARAMS.chainName],
+    ['RPC URL', PORTALDOT_ADD_CHAIN_PARAMS.rpcUrls[0]],
+    ['Chain ID', '420420777'],
+    ['Currency symbol', PORTALDOT_ADD_CHAIN_PARAMS.nativeCurrency.symbol],
+  ];
+  const down = probe && probe.status !== 'responded';
+  return (
+    <div className="card panel" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <strong style={{ fontSize: 13.5 }}>Portaldot V3 Testnet network details</strong>
+      {probe === undefined ? null : !probe ? (
+        <span className="dim" style={{ fontSize: 12 }}>EVM RPC status: not probed yet.</span>
+      ) : (
+        <span className={down ? 'warning-text' : 'success-text'} style={{ fontSize: 12, lineHeight: 1.5 }}>
+          EVM RPC {down ? 'not responding' : 'responding'} at last probe ({new Date(probe.observed_at).toLocaleTimeString()}){down && probe.error ? `: ${probe.error}` : ''}.
+          {down ? ' Wallets check the RPC before adding a network, so adding will likely fail until it responds.' : ''}
+        </span>
+      )}
+      <dl className="kv">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {v} <CopyButton text={v} label={`Copy ${k}`} />
+            </dd>
+          </div>
+        ))}
+        <div>
+          <dt>Block explorer</dt>
+          <dd className="dim">Leave empty (none confirmed)</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 function SignerDialog({ onClose }: { onClose(): void }) {
   const wallet = useWallet();
+  const [switching, setSwitching] = useState(false);
   return (
     <Modal
       title="Signer"
@@ -316,14 +361,32 @@ function SignerDialog({ onClose }: { onClose(): void }) {
           </div>
           {!wallet.onPortaldot && (
             <div style={{ marginTop: 10 }}>
-              <Notice tone="warning" title="Wrong network" action={<button className="button secondary" onClick={() => void wallet.switchNetwork()}>Switch to Portaldot V3</button>}>
-                The wallet must use EVM chain 420420777 (0x190f1ca9). Writes are blocked until it does.
+              <Notice
+                tone="warning"
+                title="Wrong network"
+                action={
+                  <button
+                    className="button secondary"
+                    disabled={switching}
+                    aria-busy={switching}
+                    onClick={async () => {
+                      setSwitching(true);
+                      await wallet.switchNetwork();
+                      setSwitching(false);
+                    }}
+                  >
+                    {switching ? 'Check your wallet…' : 'Switch / add Portaldot V3'}
+                  </button>
+                }
+              >
+                The wallet must use EVM chain 420420777 (0x190f1ca9). If the wallet does not know this network, PalletDock asks it to add it; you approve that in the wallet.
               </Notice>
             </div>
           )}
         </div>
       )}
       {wallet.error && <Notice tone="danger">{wallet.error}</Notice>}
+      {wallet.available && (!wallet.account || !wallet.onPortaldot) && <NetworkDetails />}
       <div className="card panel" style={{ borderStyle: 'dashed', opacity: 0.8 }}>
         <div className="panel-row">
           <strong style={{ fontSize: 13.5 }}>Native signer (SS58)</strong>

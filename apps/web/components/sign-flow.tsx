@@ -98,10 +98,10 @@ export function SignDialog({
       return;
     }
     if (!wallet.onPortaldot) {
-      const ok = await wallet.switchNetwork();
-      if (!ok) {
-        await record('wrong_network', { error: 'Wallet stayed on a different chain.' }).catch(() => {});
-        onDone({ kind: 'wrong_network', transactionId: prepared.transactionId, error: 'The wallet is not on Portaldot V3 Testnet (0x190f1ca9). Nothing was signed.' });
+      const sw = await wallet.switchNetwork();
+      if (!sw.ok) {
+        await record('wrong_network', { error: sw.message }).catch(() => {});
+        onDone({ kind: 'wrong_network', transactionId: prepared.transactionId, error: `${sw.message} Nothing was signed.` });
         return;
       }
     }

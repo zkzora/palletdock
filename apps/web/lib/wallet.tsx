@@ -22,7 +22,7 @@ declare global {
   }
 }
 
-import { sendWithProvider, type Eip1193, type SendOutcome } from './wallet-core';
+import { sendWithProvider, switchOrAddChain, type Eip1193, type SendOutcome, type SwitchResult } from './wallet-core';
 export type { SendOutcome } from './wallet-core';
 
 interface WalletValue {
@@ -34,7 +34,7 @@ interface WalletValue {
   error: string;
   connect(): Promise<void>;
   disconnect(): void;
-  switchNetwork(): Promise<boolean>;
+  switchNetwork(): Promise<SwitchResult>;
   send(tx: { from: string; to?: string; data: string; value: string }, timeoutMs?: number): Promise<SendOutcome>;
   balanceRaw(): Promise<string | null>;
 }
@@ -101,29 +101,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [provider]);
 
-  const switchNetwork = useCallback(async () => {
-    if (!provider) return false;
-    try {
-      await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: PORTALDOT_CHAIN.chainIdHex }] });
-    } catch (e) {
-      if (errCode(e) === 4902) {
-        try {
-          await provider.request({
-            method: 'wallet_addEthereumChain',
-            params: [{ chainId: PORTALDOT_CHAIN.chainIdHex, chainName: PORTALDOT_CHAIN.chainName, rpcUrls: PORTALDOT_CHAIN.rpcUrls, nativeCurrency: PORTALDOT_CHAIN.nativeCurrency }],
-          });
-        } catch (e2) {
-          setError(errMessage(e2));
-          return false;
-        }
-      } else {
-        setError(errCode(e) === 4001 ? 'Network switch was rejected in the wallet.' : errMessage(e));
-        return false;
-      }
-    }
-    const now = String(await provider.request({ method: 'eth_chainId' })).toLowerCase();
-    setChainId(now);
-    return now === PORTALDOT_CHAIN.chainIdHex;
+  const switchNetwork = useCallback(async (): Promise<SwitchResult> => {
+    if (!provider) return { ok: false, reason: 'switch_failed', message: 'No browser wallet is available.' };
+    setError('');
+    const r = await switchOrAddChain(provider);
+    setChainId(String(await provider.request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase() || null);
+    if (!r.ok) setError(r.message);
+    return r;
   }, [provider]);
 
   const send = useCallback<WalletValue['send']>((tx, timeoutMs) => (provider ? sendWithProvider(provider, tx, timeoutMs) : Promise.resolve({ outcome: 'failed_before_broadcast', error: 'No browser wallet is available.' })), [provider]);
