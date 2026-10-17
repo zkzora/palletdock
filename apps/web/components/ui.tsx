@@ -5,15 +5,9 @@ import { useEffect, useRef, useState } from 'react';
 
 export type Tone = 'success' | 'info' | 'warning' | 'danger' | 'idle' | 'unknown';
 
-export function Dot({ tone }: { tone: Tone }) {
-  // info = in progress across the app (waiting for a receipt, backfilling); it pulses softly.
-  return <span className={`status-dot ${tone === 'idle' || tone === 'unknown' ? '' : tone} ${tone === 'unknown' ? 'hollow' : ''} ${tone === 'info' ? 'live' : ''}`} aria-hidden="true" />;
-}
-
 export function Status({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return (
-    <span className="status-inline">
-      <Dot tone={tone} />
+    <span className="status-inline" data-tone={tone}>
       {children}
     </span>
   );
@@ -141,8 +135,7 @@ export function useToast() {
     return () => clearTimeout(t);
   }, [toast]);
   const node = toast ? (
-    <div role="status" aria-live="polite" className="toast">
-      <Dot tone={toast.bad ? 'danger' : 'success'} />
+    <div role="status" aria-live="polite" className="toast" data-tone={toast.bad ? 'danger' : 'success'}>
       {toast.msg}
     </div>
   ) : null;

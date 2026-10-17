@@ -6,7 +6,7 @@ const password = process.env.PALLETDOCK_E2E_PASSWORD;
 test('landing preserves the supplied PalletDock direction', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Deploy, index and monitor');
-  await expect(page.getByRole('link', { name: 'Open workspace' })).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Open workspace' })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('landing.png'), fullPage: true });
 });
 

@@ -93,7 +93,6 @@ export default function ContractDetailPage() {
           </div>
           <div className="badge-row">
             <span className="chip">
-              <span className="status-dot success" />
               ABI v{c.abiVersion.version} · {c.abiVersion.provenance}
             </span>
             <span className="chip dashed">Verification unavailable</span>

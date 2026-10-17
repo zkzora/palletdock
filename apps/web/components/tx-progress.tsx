@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useWorkspace } from '@/components/workspace-shell';
 import { useResource } from '@/lib/use-resource';
 import { groupDigits, shortHash } from '@/lib/format';
-import { Dot, type Tone } from '@/components/ui';
+import type { Tone } from '@/components/ui';
 
 export interface TxStatus {
   submission: string;
@@ -62,7 +62,6 @@ export function StatusCells({ cells }: { cells: Cell[] }) {
             {c.k}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-            <Dot tone={c.tone} />
             {c.t}
           </span>
           <span className="dim" style={{ fontSize: 12, lineHeight: 1.45 }}>

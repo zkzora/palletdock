@@ -91,12 +91,6 @@
 .toast { animation: pd-slide-in 260ms var(--ease-out) both; }
 .notice { animation: pd-fade 240ms var(--ease-out) both; }
 
-/* ---------------------------------------------------------------- live status pulse */
-@keyframes pd-pulse { 0% { box-shadow: 0 0 0 0 var(--pulse, rgba(108, 178, 245, .55)); } 80%, 100% { box-shadow: 0 0 0 7px transparent; } }
-.status-dot.live { animation: pd-pulse 1.8s var(--ease-out) infinite; }
-.status-dot.live.success { --pulse: rgba(76, 207, 138, .5); }
-.status-dot.live.warning { --pulse: rgba(240, 180, 41, .5); }
-
 /* Coverage bar fills smoothly. */
 .coverage-bar > div { transition: width 700ms var(--ease-out); }
 .chart > div { transition: height 500ms var(--ease-out), background-color var(--dur-fast); transform-origin: bottom; animation: pd-grow 600ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 12ms); }
@@ -109,16 +103,34 @@
 
 /* ---------------------------------------------------------------- landing hero backdrop */
 .hero-wrap { position: relative; overflow: hidden; }
+.hero-art { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  opacity: .94;
+  transform: translate3d(0, calc(var(--py, 0px) * .35), 0) scale(1.015);
+  will-change: transform; }
+.hero-art img { object-fit: cover; object-position: center right; }
+.hero-art::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(14, 15, 17, .98) 0%, rgba(14, 15, 17, .88) 38%, rgba(14, 15, 17, .25) 72%, rgba(14, 15, 17, .08) 100%), linear-gradient(180deg, rgba(14, 15, 17, .1) 45%, #0e0f11 100%); }
 .hero-grid { position: absolute; inset: -20% 0 auto 0; height: 140%; pointer-events: none; z-index: 0;
   background-image: linear-gradient(rgba(236, 237, 238, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(236, 237, 238, .045) 1px, transparent 1px);
   background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
+  opacity: .58;
+  mask-image: linear-gradient(90deg, rgba(0,0,0,.88), rgba(0,0,0,.2) 68%, transparent), radial-gradient(ellipse 76% 62% at 35% 28%, #000 25%, transparent 78%);
+  -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.88), rgba(0,0,0,.2) 68%, transparent), radial-gradient(ellipse 76% 62% at 35% 28%, #000 25%, transparent 78%);
   transform: translate3d(0, var(--py, 0px), 0); will-change: transform; }
 .hero-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: radial-gradient(600px circle at var(--gx, 50%) var(--gy, 20%), rgba(108, 178, 245, .07), transparent 60%), radial-gradient(500px circle at 80% 0%, rgba(76, 207, 138, .045), transparent 60%);
+  background: radial-gradient(600px circle at var(--gx, 50%) var(--gy, 20%), rgba(108, 178, 245, .08), transparent 60%), radial-gradient(500px circle at 82% 12%, rgba(76, 207, 138, .055), transparent 60%);
   transition: background-position var(--dur) var(--ease-out); }
 .hero-wrap > .container { position: relative; z-index: 1; }
+
+@media (max-width: 760px) {
+  .landing-nav { gap: 8px !important; }
+  .landing-nav .nav-secondary { display: none; }
+  .hero-content { padding-block: 64px 56px !important; }
+  .hero-art { opacity: .72; }
+  .hero-art img { object-position: 64% center; }
+  .hero-art::after { background: linear-gradient(180deg, rgba(14, 15, 17, .72) 0%, rgba(14, 15, 17, .84) 58%, #0e0f11 100%), linear-gradient(90deg, rgba(14, 15, 17, .9), rgba(14, 15, 17, .3)); }
+  .hero-grid { opacity: .34; }
+}
 
 /* Tilt preview (pointer parallax). */
 .tilt { transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(var(--ty, 0px)); transition: transform 500ms var(--ease-out), box-shadow var(--dur) var(--ease-out); will-change: transform; }
@@ -130,7 +142,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .enter, .reveal, .page-enter, .modal, .modal-scrim, .toast, .notice, .chart > div { opacity: 1 !important; transform: none !important; animation: none !important; }
-  .status-dot.live { animation: none; }
-  .spot:hover, .tilt, .hero-grid { transform: none !important; }
+  .spot:hover, .tilt, .hero-art, .hero-grid { transform: none !important; }
   .skeleton { animation: none; }
 }

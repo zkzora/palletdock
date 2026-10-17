@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
 import { EmptyState, ErrorState, LoadingCards } from '@/components/page-state';
 import { execLabel } from '@/components/tx-progress';
-import { CopyButton, Dot, Notice, type Tone } from '@/components/ui';
+import { CopyButton, Notice, type Tone } from '@/components/ui';
 import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
 import { ago, groupDigits, shortAddr, shortHash, when } from '@/lib/format';
@@ -100,7 +100,6 @@ export default function OverviewPage() {
                 <span className="mono dim">{k}</span>
                 <strong>{v}</strong>
                 <span className="flow-note">
-                  <Dot tone={s} />
                   {n}
                 </span>
               </Link>
@@ -115,7 +114,6 @@ export default function OverviewPage() {
               {activity.length ? (
                 activity.slice(0, 12).map((a, i) => (
                   <Link key={i} className="activity-row" href={href(a.href)} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <Dot tone={a.tone} />
                     <span>
                       <strong style={{ fontWeight: 500 }}>{a.title}</strong>
                       <small className="mono">{a.detail}</small>

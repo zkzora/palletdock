@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
-import { Dot, Notice, Pre, Segmented, useToast, type Tone } from '@/components/ui';
+import { Notice, Pre, Segmented, useToast, type Tone } from '@/components/ui';
 import { EmptyState, ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { ago, groupDigits, when } from '@/lib/format';
@@ -48,7 +48,6 @@ export default function MonitoringPage() {
       <div className="card metric" key={target}>
         <span>{target === 'evm' ? 'EVM RPC probe' : 'Substrate RPC probe'}</span>
         <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Dot tone={status[1]} />
           {status[0]}
         </strong>
         <small className="mono">{p ? `${when(p.observed_at)} · ${p.latency_ms ?? '—'} ms${p.error ? ` · ${p.error.slice(0, 120)}` : ''}` : 'No probe recorded yet.'}</small>
@@ -102,7 +101,6 @@ export default function MonitoringPage() {
             <div className="card metric">
               <span>Worker</span>
               <strong style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Dot tone={!worker ? 'idle' : worker.healthy ? 'success' : 'warning'} />
                 {!worker ? 'Unavailable' : worker.healthy ? 'Heartbeat current' : 'Stale heartbeat'}
               </strong>
               <small className="mono">{worker ? `last seen ${ago(worker.last_seen_at)} · network ${worker.info?.networkStatus ?? 'unknown'}` : 'No worker has reported.'}</small>

@@ -49,7 +49,6 @@ export default function RoadmapPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{m.title}</h2>
             <span className="chip">
-              <span className="status-dot" style={{ background: m.tone }} />
               {m.status}
             </span>
           </div>

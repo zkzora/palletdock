@@ -60,7 +60,6 @@ export default function ContractsPage() {
               </span>
               <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span className="chip">
-                  <span className="status-dot success" />
                   ABI v{c.abi_version}
                 </span>
                 <span className="chip dashed">Verification unavailable</span>

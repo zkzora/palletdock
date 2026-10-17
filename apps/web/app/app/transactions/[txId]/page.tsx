@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
 import { StatusCells, statusCells } from '@/components/tx-progress';
-import { CopyButton, Dot, KV, Notice, Pre, type Tone } from '@/components/ui';
+import { CopyButton, KV, Notice, Pre, type Tone } from '@/components/ui';
 import { ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { groupDigits, pretty, shortHash, when } from '@/lib/format';
@@ -161,7 +161,6 @@ export default function TransactionDetailPage() {
             <div className="timeline">
               {t.observations.map((o: any, i: number) => (
                 <div key={i}>
-                  <Dot tone={STAGE_TONE[o.stage] ?? 'info'} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{STAGE_LABEL[o.stage] ?? o.stage}</div>
                     <small>{o.detail}</small>

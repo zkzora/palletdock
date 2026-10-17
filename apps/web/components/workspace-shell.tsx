@@ -163,11 +163,11 @@ function Shell({ children }: { children: React.ReactNode }) {
     </button>
   ) : !wallet.onPortaldot ? (
     <button className="wallet-chip warn" onClick={() => setSignerOpen(true)}>
-      <span className="status-dot warning" /> Wrong network
+      Wrong network
     </button>
   ) : (
     <button className="wallet-chip" onClick={() => setSignerOpen(true)}>
-      <span className="status-dot success" /> {shortAddr(wallet.account)}
+      {shortAddr(wallet.account)}
     </button>
   );
 

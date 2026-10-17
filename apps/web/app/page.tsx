@@ -49,17 +49,17 @@ export default function LandingPage() {
           <Link href="/" aria-label="PalletDock home">
             <Image src="/palletdock-logo.png" alt="PalletDock" width={2172} height={724} priority style={{ width: 'auto', height: 46, filter: 'invert(1)', margin: '-8px' }} />
           </Link>
-          <nav aria-label="Page" style={{ display: 'flex', alignItems: 'center', gap: 22, fontSize: 13, flexWrap: 'wrap' }}>
-            <a href="#workflow" className="muted landing-link" style={{ textDecoration: 'none' }}>
+          <nav className="landing-nav" aria-label="Page" style={{ display: 'flex', alignItems: 'center', gap: 22, fontSize: 13, flexWrap: 'wrap' }}>
+            <a href="#workflow" className="muted landing-link nav-secondary" style={{ textDecoration: 'none' }}>
               Workflow
             </a>
-            <a href="#scope" className="muted landing-link" style={{ textDecoration: 'none' }}>
+            <a href="#scope" className="muted landing-link nav-secondary" style={{ textDecoration: 'none' }}>
               Scope
             </a>
-            <Link href="/docs" className="muted" style={{ textDecoration: 'none' }}>
+            <Link href="/docs" className="muted nav-secondary" style={{ textDecoration: 'none' }}>
               Docs
             </Link>
-            <Link href="/faq" className="muted" style={{ textDecoration: 'none' }}>
+            <Link href="/faq" className="muted nav-secondary" style={{ textDecoration: 'none' }}>
               FAQ
             </Link>
             <Link href="/login" className="button" style={{ minHeight: 34, paddingInline: 14 }}>
@@ -70,9 +70,12 @@ export default function LandingPage() {
       </header>
       <main ref={spotlight}>
         <section ref={hero} className="hero-wrap">
+        <div className="hero-art" aria-hidden="true">
+          <Image src="/palletdock-hero-v1.png" alt="" fill priority sizes="100vw" />
+        </div>
         <div className="hero-grid" aria-hidden="true" />
         <div className="hero-glow" aria-hidden="true" />
-        <div className="container" style={{ paddingBlock: '88px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <div className="container hero-content" style={{ paddingBlock: '88px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
           <div className="eyebrow enter" style={i(0)}>Developer workspace for Portaldot</div>
           <h1 className="enter" style={{ ...i(1), margin: 0, maxWidth: 900, fontSize: 'clamp(38px,6vw,64px)', fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1.04, textWrap: 'balance' }}>
             Deploy, index and monitor Portaldot contracts in one workspace.
@@ -92,7 +95,6 @@ export default function LandingPage() {
             </a>
           </div>
           <div className="notice enter" style={{ ...i(4), maxWidth: 780 }}>
-            <span className="status-dot warning" aria-hidden="true" />
             <span>
               <strong>Testnet MVP, self-hosted.</strong> The workflows below are implemented and tested against a local fixture chain, and the network identity is verified live on Portaldot V3 Testnet. The wallet-signed deployment run on the live testnet is still pending. Not audited, not production-ready, no mainnet support. PalletDock is independent tooling, not an official Portaldot product.
             </span>
@@ -125,7 +127,6 @@ export default function LandingPage() {
                   </span>
                   <strong style={{ fontSize: 16 }}>{v}</strong>
                   <span className="muted" style={{ marginTop: 'auto', display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5 }}>
-                    <span className="status-dot success" />
                     {n}
                   </span>
                 </div>
@@ -176,7 +177,6 @@ export default function LandingPage() {
                     {b}
                   </p>
                   <span className="badge" style={{ alignSelf: 'flex-start', marginTop: 'auto' }}>
-                    <span className="status-dot success" />
                     Implemented
                   </span>
                 </article>
