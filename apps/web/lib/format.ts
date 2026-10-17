@@ -23,7 +23,7 @@ export function rawUnits(dec: string | null | undefined): string {
 }
 
 /** Exact native-unit formatting (only for native Substrate amounts with verified decimals). */
-export function formatNative(raw: string, decimals = 14, symbol = 'tPOTv3'): string {
+export function formatNative(raw: string, decimals = 14, symbol = 'tPOT'): string {
   const v = BigInt(raw);
   const base = 10n ** BigInt(decimals);
   const frac = (v % base).toString().padStart(decimals, '0').replace(/0+$/, '');

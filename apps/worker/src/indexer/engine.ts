@@ -68,6 +68,11 @@ class InconsistentRangeError extends Error {}
 
 const RANGE_ERROR_RE = /(range|block range|too many|limit|exceed|response size|query returned more than|max results)/i;
 
+/** The node discarded the state needed to serve this block (pruned history). */
+export function isPrunedStateError(error: unknown): boolean {
+  return error instanceof RpcResponseError && /state already discarded|unknownblock|state.*pruned|pruned/i.test(error.message);
+}
+
 export function isRangeTooLarge(error: unknown): boolean {
   if (error instanceof RpcResponseError) return error.code === -32005 || RANGE_ERROR_RE.test(error.message);
   if (error instanceof RpcTransportError) return error.kind === 'response_too_large';
@@ -227,6 +232,14 @@ export class IndexerEngine {
       if (e instanceof FencedError) {
         await this.opsLog(src.project_id, src.id, 'WARN', 'Indexer commit discarded: lease or generation changed (paused, archived, or reclaimed).', { generation: claim.generation });
         return { kind: 'fenced', sourceId: src.id };
+      }
+      if (isPrunedStateError(e)) {
+        // Retrying cannot help: ancestry of these blocks can no longer be verified on this node.
+        return this.markRecovery(
+          claim,
+          src,
+          `The RPC node no longer serves the blocks this source needs (state pruned): ${(e as Error).message.split('\n')[0].slice(0, 160)}. Ancestry cannot be verified, so indexing stopped instead of guessing. Reindex from a recent start block within the node's retained window, or use a node with full history.`,
+        );
       }
       if (e instanceof InconsistentRangeError) {
         // Chain moved during the fetch; retry soon without counting as an RPC failure.

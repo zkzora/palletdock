@@ -15,10 +15,10 @@ If `network:verify` fails, stop: check the RPCs, then [TROUBLESHOOTING.md](TROUB
 
 ## 1. Wallet and funding
 
-1. Add the network in your wallet: name Portaldot V3 Testnet, RPC `https://testnetv3-eth-rpc.feso-apps.xyz`, chain ID `420420777`, symbol `tPOTv3`, no explorer.
+1. Add the network in your wallet: name Portaldot V3 Testnet, RPC `https://test-evm-rpc-v3.portaldot.dev`, chain ID `420420777`, symbol `tPOT`, no explorer.
 2. Sign in to PalletDock, create a project, click **Connect wallet**, and approve account access.
 3. Overview → **Resolve funding account**. Copy the SS58 account. It comes from `reviveApi.accountId` at a finalized block.
-4. Fund that native account with tPOTv3 via the node console or the Portaldot team's distribution. You sign this transfer yourself.
+4. Fund that native account with tPOT (the live runtime symbol) via the node console or the Portaldot team's distribution. You sign this transfer yourself.
 5. Optional unit check: compare the wallet's EVM balance (shown as raw base units in Contract → Write → Signer) with the native free balance. Record both in TESTNET_EVIDENCE.md. PalletDock keeps EVM amounts raw until this is verified.
 
 ## 2. Deploy
@@ -39,6 +39,9 @@ Contract → **Write** → `store(uint256)` = `42` → Review write → Request 
 
 ## 4. Index
 
+> The Portaldot V3 RPC node keeps state for only ~258 blocks (about 26 minutes). Configure the indexer **soon after deploying** (start block = deployment block) and keep the worker running. A start block older than the window is rejected; a worker stopped for longer than the window puts the source in *Recovery required* (reindex from a recent block).
+
+
 Indexer → **Configure log source** → contract PalletDockStorage, event NumberChanged, start block = deployment block → Save. Wait until the record `NumberChanged … newValue=42` appears and coverage passes the write's block. Confirm the record's block hash, tx hash, and log index match the receipt's log.
 
 ## 5. API
@@ -53,7 +56,7 @@ Record the `requestId`, checkpoint, and that `finality` is `unknown`.
 
 ## 6. Restart and interruption
 
-1. Stop the worker (Ctrl+C), call `store(43)`, wait one minute, start the worker again. Confirm the new event is indexed and `SELECT count(*) FROM raw_logs WHERE canonical` grew by exactly one.
+1. Stop the worker (Ctrl+C), call `store(43)`, wait one minute (well under the ~26-minute retention window), start the worker again. Confirm the new event is indexed and `SELECT count(*) FROM raw_logs WHERE canonical` grew by exactly one.
 2. With `PALLETDOCK_DEV_CONTROLS=1`, Indexer → **Simulate RPC interruption**. Observe *Needs attention* with backoff, then recovery, and no duplicate records.
 
 Write the results into [TESTNET_EVIDENCE.md](TESTNET_EVIDENCE.md) without secrets. Only then mark the live checks complete in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).

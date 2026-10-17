@@ -23,19 +23,23 @@ export const PORTALDOT_V3_TESTNET: PortaldotNetworkConfig = {
   networkId: 'portaldot-v3-testnet',
   name: 'Portaldot V3 Testnet',
   environment: 'testnet',
-  evmRpcUrl: 'https://testnetv3-eth-rpc.feso-apps.xyz',
-  substrateRpcUrl: 'wss://testnetv3-node.feso-apps.xyz',
+  evmRpcUrl: 'https://test-evm-rpc-v3.portaldot.dev',
+  substrateRpcUrl: 'wss://test-node-v3.portaldot.dev',
   evmChainId: 420420777,
   evmChainIdHex: '0x190f1ca9',
-  nativeTokenSymbol: 'tPOTv3',
+  /** Live runtime system_properties (2026-10-17); earlier guide versions said tPOTv3. Accepted by the owner. */
+  nativeTokenSymbol: 'tPOT',
   nativeTokenDecimals: 14,
   ss58Format: 42,
-  nodeConsoleUrl: 'https://node-console.feso-apps.xyz/',
+  nodeConsoleUrl: 'https://node-console.portaldot.dev/',
   developerGuideUrl: 'https://github.com/ItsCogumellum/portaldot-v3-testnet-guide',
 };
 
-/** Hosts an operator may point the allowlisted network at (e.g. a self-hosted node). */
-const ALLOWED_RPC_HOST_SUFFIXES = ['feso-apps.xyz'];
+/**
+ * Hosts an operator may point the allowlisted network at. Portaldot moved its
+ * V3 endpoints to portaldot.dev in October 2026; the feso-apps.xyz hosts are retired.
+ */
+const ALLOWED_RPC_HOST_SUFFIXES = ['portaldot.dev'];
 
 export function isAllowedRpcUrl(url: string, opts: { allowLoopback?: boolean } = {}): boolean {
   let u: URL;

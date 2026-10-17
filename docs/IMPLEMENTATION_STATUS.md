@@ -6,7 +6,7 @@ Three separate questions per area:
 
 - **Implemented**: the code exists in `main`.
 - **Locally tested**: an automated check passed: unit/integration tests (real PostgreSQL), browser E2E on the *fixture chain* (local Hardhat EVM, chain ID 420420777, labelled FIXTURE NETWORK), CI, or Docker. Not evidence about Portaldot.
-- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. **Nothing is live-verified yet**: both public RPCs return HTTP 502 (see TESTNET_EVIDENCE.md).
+- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. As of 2026-10-17 (new `portaldot.dev` endpoints): network identity, account mapping, and read-only capabilities are live-verified; wallet-signed transactions are still pending (TESTNET_EVIDENCE.md).
 
 ## Verification runs
 
@@ -19,39 +19,41 @@ Three separate questions per area:
 | GitHub Actions CI run 37815181739 | ubuntu-latest, commit 33735d8 | checks ✓, fixture E2E ✓, **docker ✓** (image build, compose app profile: migrate exited 0, API healthy, web `/login` 200, `/backend/health` 200, worker running) |
 | Fixture E2E | Windows, 2026-10-08 | desktop 6 + mobile 1 (+ screenshots) pass |
 | `pnpm audit --prod` | 2026-10-09 | no known vulnerabilities |
-| Live identity probes | local worker → Portaldot | **failing**: EVM HTTP 502, native WS timeout; 0 fingerprints activated |
+| Live identity probes (old endpoints, 2026-10-08) | local worker → feso-apps.xyz | failed: EVM HTTP 502, native WS timeout (endpoints since retired) |
+| `pnpm network:verify` (new endpoints, 2026-10-17) | → test-evm-rpc-v3 / test-node-v3.portaldot.dev | **verified**; fingerprint active (genesis 0xd4f9…83bd, portaldot-v3 spec 3002, tPOT/14/SS58 42) |
+| `pnpm network:capabilities` (2026-10-17) | read-only | deploy simulation matches compiled bytecode; gas/fee methods, finalized/safe tags, getLogs, mapping OK; node retains 258 blocks |
 
 ## Status by area
 
 | Area | Implemented | Locally tested | Live-testnet verified |
 | --- | --- | --- | --- |
 | Network config, RPC allowlist (SSRF) | ✓ | ✓ `quantity.test.ts` | – |
-| Identity fingerprint, mismatch halt | ✓ | partial (reset path tested; probe logic unit-tested in chain tests) | ✗ RPC 502 |
+| Identity fingerprint, mismatch halt | ✓ | ✓ (pruned-node and codec-wrapper cases tested) | ✓ fingerprint active 2026-10-17 |
 | Bounded RPC backoff (probes, receipts, indexer) | ✓ | ✓ `Backoff` + overlap test; worker log spacing measured | n/a |
 | Network reset migration (manual, `--confirm`) | ✓ | ✓ `network-reset.test.ts` | not run (needs your approval) |
 | Lossless quantities, EVM unit policy (raw) | ✓ | ✓ | ✗ EVM denomination unverified |
 | Artifact/ABI validation, argument coercion | ✓ | ✓ `abi.test.ts` | – |
-| Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ✗ Revive compatibility unknown |
+| Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ◐ deploy simulated read-only (code matches); not broadcast |
 | Owner auth, sessions, CSRF, login limits | ✓ | ✓ `api.test.ts` | n/a |
 | Projects, archive/restore, export | ✓ | ✓ API + fixture E2E | n/a |
 | Owner/project isolation | ✓ | ✓ every workspace route | n/a |
 | Contract import (code check), ABI versions, remove | ✓ | ✓ API + fixture E2E | ✗ |
 | Read (eth_call), lossless output | ✓ | ✓ | ✗ |
 | Write/deploy preparation, fee estimate, revert decoding | ✓ | ✓ (custom error decode; deploy + write on fixture) | ✗ |
-| Storage-deposit dry run (reviveApi) | ✓ | unavailable path only | ✗ runtime API shape unknown |
-| Account mapping (reviveApi.accountId) | ✓ | codec unit test | ✗ |
+| Storage-deposit dry run (reviveApi) | ✓ | unavailable path; failed-dispatch path | ◐ API shape confirmed; needs a funded origin for a value |
+| Account mapping (reviveApi.accountId) | ✓ | codec unit test | ✓ read-only mapping at a finalized block |
 | Wallet: wrong network, sender change, rejection, insufficient funds, unknown/timeout, late hash | ✓ | ✓ `wallet-core.test.ts`, fixture E2E rejection | ✗ |
 | Submission state machine | ✓ | ✓ | ✗ |
 | Receipt tracker: inclusion, revert, disappearance → reorged_out, re-inclusion, sender/recipient match, deploy → contract | ✓ | ✓ `tx-tracker.test.ts` (dedicated) | ✗ |
 | Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ✗ |
-| Indexer: reorg rollback/replacement, deep reorg → recovery_required | ✓ | ✓ | ✗ |
+| Indexer: reorg rollback/replacement, deep reorg or pruned history → recovery_required | ✓ | ✓ | ✗ |
 | Read API v1, keys, redaction, snapshot cursors | ✓ | ✓ `api.test.ts`, `cursor.test.ts` | ✗ |
 | OpenAPI conformance | ✓ | ✓ `openapi.test.ts` | n/a |
-| Monitoring and request logging | ✓ | ✓ | ✗ live probes failing (recorded) |
+| Monitoring and request logging | ✓ | ✓ | ✓ live probes responding |
 | Web UI (design port), mobile layout | ✓ | ✓ fixture E2E desktop + mobile | ✗ |
 | Docker image + compose | ✓ | ✓ CI docker job | n/a |
 | CI | ✓ | ✓ two green runs | n/a |
-| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture only | **✗ Blocked** |
+| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture only | **Pending human wallet** |
 
 ## Open items
 

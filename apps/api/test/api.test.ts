@@ -40,6 +40,11 @@ class FakeRpc implements RpcCaller {
         return '0x5208' as T;
       case 'eth_gasPrice':
         return '0x3b9aca00' as T;
+      case 'eth_getBlockByNumber': {
+        const n = Number(BigInt(String(params[0])));
+        if (n < 50) throw new RpcResponseError('Cannot construct OnlineClientAtBlock: UnknownBlock: State already discarded', -32000, null, method);
+        return { number: String(params[0]), hash: '0x' + n.toString(16).padStart(64, '0'), parentHash: '0x' + (n - 1).toString(16).padStart(64, '0'), timestamp: '0x1' } as T;
+      }
       default:
         throw new RpcResponseError(`Method ${method} not found`, -32601, null, method);
     }
@@ -173,6 +178,15 @@ describe('contracts', () => {
     expect(detail.status).toMatchObject({ submission: 'unknown', inclusion: 'not_observed', execution: 'unknown', finality: 'unknown' });
     const rejected = (await ws(sessionA, 'GET', `/workspace/projects/${A.projectId}/transactions?filter=rejected`)).json().data;
     expect(rejected.map((t: { id: string }) => t.id)).toContain(t1);
+  });
+
+  it('refuses an indexer start block the RPC node has already pruned', async () => {
+    const pruned = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources`, { contractId, events: ['NumberChanged'], startBlock: '12' });
+    expect(pruned.statusCode).toBe(400);
+    expect(pruned.json().error.message).toMatch(/older than the RPC node retains/);
+    const ok = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources`, { contractId, events: ['NumberChanged'], startBlock: '60' });
+    expect(ok.statusCode).toBe(201);
+    await db.pool.query(`UPDATE indexer_sources SET desired_state='deleted', status='stopped' WHERE id=$1`, [ok.json().data.id]);
   });
 
   it('validates uploaded artifacts and refuses runtime-only or unlinked bytecode', async () => {

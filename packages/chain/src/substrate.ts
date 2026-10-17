@@ -45,6 +45,21 @@ export interface UnavailableEstimate {
   reason: string;
 }
 
+/**
+ * Normalise system_properties. Depending on metadata, toJSON() can return codec
+ * wrappers whose JSON form is an array but which are not real arrays, so the
+ * value is round-tripped through JSON before reading it.
+ */
+export function parseChainProperties(json: unknown): { ss58Format: number | null; tokenSymbols: string[]; tokenDecimals: number[] } {
+  const props = JSON.parse(JSON.stringify(json ?? {})) as { ss58Format?: unknown; tokenSymbol?: unknown; tokenDecimals?: unknown };
+  const list = (v: unknown): unknown[] => (v == null ? [] : Array.isArray(v) ? v : [v]);
+  return {
+    ss58Format: props.ss58Format == null ? null : Number(props.ss58Format),
+    tokenSymbols: list(props.tokenSymbol).map(String),
+    tokenDecimals: list(props.tokenDecimals).map(Number),
+  };
+}
+
 type CodecLike = {
   isSome?: boolean;
   unwrap?: () => CodecLike;
@@ -98,9 +113,7 @@ export class SubstrateAdapter {
       this.api.rpc.system.properties(),
     ]);
     const runtime = this.api.runtimeVersion;
-    const props = properties.toJSON() as { ss58Format?: number | null; tokenSymbol?: string[] | string | null; tokenDecimals?: number[] | number | null };
-    const tokenSymbols = props.tokenSymbol == null ? [] : Array.isArray(props.tokenSymbol) ? props.tokenSymbol.map(String) : [String(props.tokenSymbol)];
-    const tokenDecimals = props.tokenDecimals == null ? [] : Array.isArray(props.tokenDecimals) ? props.tokenDecimals.map(Number) : [Number(props.tokenDecimals)];
+    const { ss58Format, tokenSymbols, tokenDecimals } = parseChainProperties(properties.toJSON());
     const identity: SubstrateIdentity = {
       genesisHash: this.api.genesisHash.toHex(),
       bestBlockNumber: best.number.toString(),
@@ -109,7 +122,7 @@ export class SubstrateAdapter {
       specName: runtime.specName.toString(),
       specVersion: runtime.specVersion.toString(),
       transactionVersion: runtime.transactionVersion.toString(),
-      ss58Format: props.ss58Format == null ? null : Number(props.ss58Format),
+      ss58Format,
       tokenSymbols,
       tokenDecimals,
     };
@@ -194,6 +207,12 @@ export class SubstrateAdapter {
       const raw = sd.charge ?? sd.Charge ?? sd.refund ?? sd.Refund;
       const amountRaw = typeof raw === 'string' && raw.startsWith('0x') ? BigInt(raw).toString() : BigInt(String(raw)).toString();
       const result = out?.result ?? {};
+      const dispatchOk = 'ok' in result || 'Ok' in result;
+      if (!dispatchOk) {
+        // A failed dry run (for example an unfunded origin) does not produce a meaningful deposit.
+        const err = JSON.stringify(result.err ?? result.Err ?? result).slice(0, 300);
+        return { status: 'unavailable', reason: `The ${req.kind} dry run did not succeed, so its storage deposit is not meaningful (dispatch error: ${err}).` };
+      }
       return {
         status: 'estimated',
         kind,
@@ -203,7 +222,7 @@ export class SubstrateAdapter {
         blockHash,
         specVersion: runtime.specVersion.toString(),
         weightRequired: out?.weightRequired ?? out?.gasRequired ?? null,
-        dispatchOk: 'ok' in result || 'Ok' in result,
+        dispatchOk,
       };
     } catch (e) {
       return { status: 'unavailable', reason: `Dry run failed: ${(e as Error).message.split('\n')[0]}` };

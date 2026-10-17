@@ -1,6 +1,7 @@
 # Limitations
 
-- **No live acceptance yet.** Portaldot V3 RPCs were unavailable (HTTP 502) during development. Compatibility of the bundled EVM bytecode (solc 0.8.24, evmVersion paris) with the Revive runtime, `eth_getLogs` range limits, fee fields, and the dry-run API shape are unverified on the live network.
+- **Live acceptance partly done.** Network identity and capabilities are live-verified on the new Portaldot endpoints (2026-10-17) and a read-only deploy simulation succeeded. A wallet-signed deployment, write, indexed event, and restart run on the live testnet are still pending.
+- **Short node history.** The Portaldot V3 RPC node keeps block state for ~258 blocks (~26 min). Indexer start blocks must be recent and the worker must keep running; otherwise the source needs a reindex.
 - **Finality is unknown** for every record. No verified finality adapter.
 - **EVM units unverified.** Balances, values, gas prices, and fees are raw base units.
 - **Storage deposit** comes only from a pre-signing dry run, when available. It is not read from receipts and is not reconciled after execution.

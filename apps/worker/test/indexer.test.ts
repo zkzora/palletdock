@@ -296,4 +296,21 @@ describe('IndexerEngine', () => {
       await db.pool.query(`UPDATE network_fingerprints SET status='active' WHERE status='superseded'`);
     }
   });
+
+  it('stops with recovery_required (not endless retries) when the node pruned the checkpoint block', async () => {
+    chain.mine([numberChanged(0n, 1n)]);
+    const src = await setupSource({ chain });
+    await src.make().drain();
+    // Worker was offline longer than the node's retained window.
+    chain.mineEmpty(30);
+    chain.prunedBelow = chain.head - 5;
+    await makeRunnable(src.sourceId);
+    const r = await src.make().drain();
+    expect(r.some((x) => x.kind === 'recovery_required')).toBe(true);
+    expect(r.some((x) => x.kind === 'backoff')).toBe(false);
+    const s = (await db.pool.query('SELECT status,last_error FROM indexer_sources WHERE id=$1', [src.sourceId])).rows[0];
+    expect(s.status).toBe('recovery_required');
+    expect(s.last_error).toMatch(/state pruned/);
+    expect(await canonicalLogs(src.sourceId)).toHaveLength(1);
+  });
 });

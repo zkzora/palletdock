@@ -22,7 +22,8 @@
     "e2e": "pnpm --filter @palletdock/web e2e",
     "e2e:stack": "tsx scripts/e2e-stack.ts",
     "e2e:fixture": "pnpm --filter @palletdock/web e2e:fixture",
-    "network:accept-reset": "pnpm --filter @palletdock/worker network:accept-reset"
+    "network:accept-reset": "pnpm --filter @palletdock/worker network:accept-reset",
+    "network:capabilities": "pnpm --filter @palletdock/worker network:capabilities"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

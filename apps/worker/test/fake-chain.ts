@@ -25,6 +25,8 @@ const h = (s: string) => '0x' + createHash('sha256').update(s).digest('hex');
 export class FakeChain implements RpcCaller {
   blocks: Block[] = [];
   maxLogRange = Infinity;
+  /** Simulate a state-pruning node: headers below this height cannot be served. */
+  prunedBelow = 0;
   calls: string[] = [];
   private failures: Array<() => Error> = [];
   onGetLogs?: (from: number, to: number) => Promise<void> | void;
@@ -77,6 +79,7 @@ export class FakeChain implements RpcCaller {
       case 'eth_getBlockByNumber': {
         const tag = params[0] as string;
         const n = tag === 'latest' ? this.head : Number(BigInt(tag));
+        if (n < this.prunedBelow) throw new RpcResponseError(`Cannot construct OnlineClientAtBlock: UnknownBlock: State already discarded for block ${n}`, -32000, null, method);
         const b = this.blocks[n];
         if (!b) return null as T;
         return { number: '0x' + b.number.toString(16), hash: b.hash, parentHash: b.parentHash, timestamp: '0x' + b.timestamp.toString(16) } as T;

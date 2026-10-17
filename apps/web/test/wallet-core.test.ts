@@ -115,7 +115,7 @@ describe('switch or add Portaldot V3', () => {
     const { p } = chainWallet({ unknownError: Object.assign(new Error('x'), { code: 4902 }), addError: new Error('Could not fetch chain ID. Is your RPC URL correct?') });
     const r = await switchOrAddChain(p);
     expect(r).toMatchObject({ ok: false, reason: 'rpc_unreachable' });
-    expect((r as { message: string }).message).toMatch(/testnetv3-eth-rpc/);
+    expect((r as { message: string }).message).toMatch(/test-evm-rpc-v3\.portaldot\.dev/);
   });
 
   it('reports a rejection of the add prompt', async () => {

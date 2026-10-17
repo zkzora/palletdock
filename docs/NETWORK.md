@@ -7,20 +7,20 @@
 | Field | Value |
 | --- | --- |
 | networkId | portaldot-v3-testnet |
-| EVM RPC | https://testnetv3-eth-rpc.feso-apps.xyz |
-| Substrate RPC | wss://testnetv3-node.feso-apps.xyz |
+| EVM RPC | https://test-evm-rpc-v3.portaldot.dev |
+| Substrate RPC | wss://test-node-v3.portaldot.dev |
 | EVM chain ID | 420420777 (0x190f1ca9) |
-| Native token | tPOTv3, 14 decimals |
+| Native token | tPOT, 14 decimals (live runtime value; earlier guide versions said tPOTv3) |
 | SS58 | 42 |
 
-Overrides (`PORTALDOT_EVM_RPC_URL`, `PORTALDOT_SUBSTRATE_RPC_URL`) must match the host allowlist (`*.feso-apps.xyz`, HTTPS/WSS, no credentials). Loopback is accepted only with `PALLETDOCK_ALLOW_LOOPBACK_RPC=1` outside production (fixture E2E).
+Overrides (`PORTALDOT_EVM_RPC_URL`, `PORTALDOT_SUBSTRATE_RPC_URL`) must match the host allowlist (`*.portaldot.dev`, HTTPS/WSS, no credentials; the earlier `feso-apps.xyz` endpoints were retired by Portaldot). Loopback is accepted only with `PALLETDOCK_ALLOW_LOOPBACK_RPC=1` outside production (fixture E2E).
 
 ## Identity verification
 
 `pnpm network:verify` (and the worker: every 60 s while healthy, with jittered exponential backoff up to 30 min while probes fail, so an outage is not polled continuously) runs:
 
 - EVM: `eth_chainId` (must be 0x190f1ca9), `eth_getBlockByNumber(0x0)`, `eth_getBlockByNumber(latest)`, `web3_clientVersion`.
-- Native: genesis hash, best and finalized heads, runtime version, `system_properties` (SS58 42, tPOTv3, 14 decimals must match).
+- Native: genesis hash, best and finalized heads, runtime version, `system_properties` (SS58 42, tPOT, 14 decimals must match).
 
 Every attempt is stored in `rpc_probes`. A fingerprint becomes `active` only when both sides succeed. Later runs update `last_verified_at`. A different genesis or chain ID is stored as `mismatch` and halts indexing and tracking.
 

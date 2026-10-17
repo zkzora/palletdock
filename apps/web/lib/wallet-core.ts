@@ -72,8 +72,8 @@ export async function sendWithProvider(
 export const PORTALDOT_ADD_CHAIN_PARAMS = {
   chainId: PORTALDOT_CHAIN_ID_HEX,
   chainName: 'Portaldot V3 Testnet',
-  rpcUrls: ['https://testnetv3-eth-rpc.feso-apps.xyz'],
-  nativeCurrency: { name: 'tPOTv3', symbol: 'tPOTv3', decimals: 18 },
+  rpcUrls: ['https://test-evm-rpc-v3.portaldot.dev'],
+  nativeCurrency: { name: 'tPOT', symbol: 'tPOT', decimals: 18 },
 };
 
 /** Wallets report "unknown chain" as 4902, nested in data/originalError, or only in the message. */

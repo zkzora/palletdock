@@ -50,9 +50,11 @@ On Linux the fixture stack stops its children by process group; on Windows use `
 
 ## Next steps, in priority order
 
-1. **Live walkthrough** (WALKTHROUGH.md) once `pnpm network:verify` succeeds. A human approves every wallet prompt and funds the wallet; record TESTNET_EVIDENCE.md. Do not accept a network reset or change the network without the owner's approval.
-2. If Revive rejects the EVM bytecode: add PolkaVM (resolc) builds of the samples (artifact validation already detects `polkavm`).
-3. Live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy from the balance comparison.
-4. Replacement-transaction linking by nonce.
+1. **Live walkthrough** (WALKTHROUGH.md): network identity is verified on the new endpoints, so this now only needs a human with a funded wallet approving each prompt. Configure the indexer within ~26 minutes of deploying (node retains 258 blocks). Record TESTNET_EVIDENCE.md. Do not change the network or accept a reset without the owner's approval.
+2. Verify the EVM unit policy from the live balance comparison (wallet EVM balance vs native free balance of the mapped account).
+3. Replacement-transaction linking by nonce.
+4. A finality adapter: the node exposes `finalized`/`safe` tags and GRANDPA is present, but nothing is claimed until a tested adapter links EVM blocks to native finality.
+
+Network change on 2026-10-17: endpoints moved to `*.portaldot.dev` (owner-approved), native token symbol is `tPOT` (owner-approved), fingerprint `3fc49db4…` active.
 
 Done since the previous handoff: a dedicated receipt-tracker test (disappearance, re-inclusion, mismatch), bounded RPC backoff with an overlap guard, an independent clean-clone rerun, two green CI runs including a Docker compose boot, and the security review in SECURITY_REVIEW.md.

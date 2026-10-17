@@ -129,7 +129,7 @@ try {
   await pool.query('INSERT INTO owners(email,password_hash) VALUES ($1,$2)', [email, await hashPassword(password)]);
   await pool.query(
     `INSERT INTO network_fingerprints(network_id,status,genesis_hash,evm_chain_id,evm_genesis_hash,spec_name,spec_version,ss58_format,token_symbol,token_decimals,evidence)
-     VALUES ('portaldot-v3-testnet','active',$1,420420777,$1,'fixture-hardhat',0,42,'tPOTv3',14,$2)`,
+     VALUES ('portaldot-v3-testnet','active',$1,420420777,$1,'fixture-hardhat',0,42,'tPOT',14,$2)`,
     [genesis, JSON.stringify({ fixture: true, note: 'E2E fixture fingerprint for a local Hardhat chain. Not Portaldot.' })],
   );
   await pool.end();

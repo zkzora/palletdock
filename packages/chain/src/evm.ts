@@ -1,11 +1,13 @@
 import { getAddress, isAddress, type Hex } from 'viem';
 import { toDecimalString, type PortaldotNetworkConfig } from '@palletdock/shared';
-import { JsonRpcClient, type RpcCaller } from './json-rpc.js';
+import { JsonRpcClient, RpcResponseError, type RpcCaller } from './json-rpc.js';
 
 export interface EvmIdentity {
   chainId: number;
   chainIdHex: Hex;
-  genesisHash: Hex;
+  /** EVM block 0 hash; null when the node has pruned the state needed to serve it. */
+  genesisHash: Hex | null;
+  genesisNote: string | null;
   latestBlockNumber: string;
   latestBlockHash: Hex;
   clientVersion: string | null;
@@ -113,7 +115,12 @@ export class EvmAdapter {
   async identity(): Promise<EvmIdentity> {
     const [chainIdValue, genesis, latest, clientVersion] = await Promise.all([
       this.rpc.call<string>('eth_chainId'),
-      this.rpc.call<Record<string, unknown>>('eth_getBlockByNumber', ['0x0', false]),
+      // Pruned Revive eth-rpc nodes answer block 0 with a JSON-RPC error ("State already discarded").
+      // That is not an identity failure; transport errors still are.
+      this.rpc.call<Record<string, unknown>>('eth_getBlockByNumber', ['0x0', false]).catch((e: unknown) => {
+        if (e instanceof RpcResponseError) return { __unavailable: e.message.split('\n')[0].slice(0, 300) } as Record<string, unknown>;
+        throw e;
+      }),
       this.rpc.call<Record<string, unknown>>('eth_getBlockByNumber', ['latest', false]),
       this.rpc.call<string>('web3_clientVersion').catch(() => null),
     ]);
@@ -127,7 +134,8 @@ export class EvmAdapter {
     return {
       chainId,
       chainIdHex,
-      genesisHash: requiredHex(genesis?.hash, 'genesis block hash', 32),
+      genesisHash: genesis && '__unavailable' in genesis ? null : requiredHex(genesis?.hash, 'genesis block hash', 32),
+      genesisNote: genesis && '__unavailable' in genesis ? `EVM block 0 unavailable from this node: ${String(genesis.__unavailable)}` : null,
       latestBlockNumber: requiredQuantity(latest?.number, 'latest block number'),
       latestBlockHash: requiredHex(latest?.hash, 'latest block hash', 32),
       clientVersion,

@@ -348,7 +348,7 @@ function SignerPanel() {
           </div>
           <div>
             <dt>Unit note</dt>
-            <dd className="dim">The EVM facade denomination is not verified; native tPOTv3 decimals (14) are not applied to EVM values.</dd>
+            <dd className="dim">The EVM facade denomination is not verified; native tPOT decimals (14) are not applied to EVM values.</dd>
           </div>
         </dl>
       ) : (

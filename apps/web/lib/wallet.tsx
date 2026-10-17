@@ -12,8 +12,8 @@ export const PORTALDOT_CHAIN = {
   chainIdHex: '0x190f1ca9',
   chainId: 420420777,
   chainName: 'Portaldot V3 Testnet',
-  rpcUrls: ['https://testnetv3-eth-rpc.feso-apps.xyz'],
-  nativeCurrency: { name: 'tPOTv3', symbol: 'tPOTv3', decimals: 18 },
+  rpcUrls: ['https://test-evm-rpc-v3.portaldot.dev'],
+  nativeCurrency: { name: 'tPOT', symbol: 'tPOT', decimals: 18 },
 };
 
 declare global {

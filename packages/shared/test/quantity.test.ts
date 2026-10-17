@@ -36,11 +36,13 @@ describe('unit conversions', () => {
 
 describe('RPC allowlist', () => {
   it('rejects SSRF-prone targets', () => {
-    expect(isAllowedRpcUrl('https://testnetv3-eth-rpc.feso-apps.xyz')).toBe(true);
-    expect(isAllowedRpcUrl('http://testnetv3-eth-rpc.feso-apps.xyz')).toBe(false);
+    expect(isAllowedRpcUrl('https://test-evm-rpc-v3.portaldot.dev')).toBe(true);
+    expect(isAllowedRpcUrl('http://test-evm-rpc-v3.portaldot.dev')).toBe(false);
     expect(isAllowedRpcUrl('https://169.254.169.254/latest')).toBe(false);
-    expect(isAllowedRpcUrl('https://evil.example/feso-apps.xyz')).toBe(false);
-    expect(isAllowedRpcUrl('https://user:pw@testnetv3-eth-rpc.feso-apps.xyz')).toBe(false);
+    expect(isAllowedRpcUrl('https://testnetv3-eth-rpc.feso-apps.xyz')).toBe(false); // retired endpoint
+    expect(isAllowedRpcUrl('https://portaldot.dev.evil.example')).toBe(false);
+    expect(isAllowedRpcUrl('https://evil.example/portaldot.dev')).toBe(false);
+    expect(isAllowedRpcUrl('https://user:pw@test-evm-rpc-v3.portaldot.dev')).toBe(false);
     expect(isAllowedRpcUrl('http://127.0.0.1:8545')).toBe(false);
     expect(isAllowedRpcUrl('http://127.0.0.1:8545', { allowLoopback: true })).toBe(true);
   });

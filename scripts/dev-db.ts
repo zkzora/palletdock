@@ -34,8 +34,13 @@ async function stop(signal: string): Promise<void> {
 process.once('SIGINT', () => void stop('SIGINT'));
 process.once('SIGTERM', () => void stop('SIGTERM'));
 
-if (!existsSync(databaseDir)) console.log(`[postgres] initializing ${databaseDir}`);
-await pg.initialise();
+// initdb refuses a non-empty directory, so only initialise a fresh cluster.
+if (!existsSync(path.join(databaseDir, 'PG_VERSION'))) {
+  console.log(`[postgres] initializing ${databaseDir}`);
+  await pg.initialise();
+} else {
+  console.log(`[postgres] reusing existing cluster in ${databaseDir}`);
+}
 await pg.start();
 try {
   await pg.createDatabase(database);
