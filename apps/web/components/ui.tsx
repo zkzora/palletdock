@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from 'react';
 export type Tone = 'success' | 'info' | 'warning' | 'danger' | 'idle' | 'unknown';
 
 export function Dot({ tone }: { tone: Tone }) {
-  return <span className={`status-dot ${tone === 'idle' || tone === 'unknown' ? '' : tone} ${tone === 'unknown' ? 'hollow' : ''}`} aria-hidden="true" />;
+  // info = in progress across the app (waiting for a receipt, backfilling); it pulses softly.
+  return <span className={`status-dot ${tone === 'idle' || tone === 'unknown' ? '' : tone} ${tone === 'unknown' ? 'hollow' : ''} ${tone === 'info' ? 'live' : ''}`} aria-hidden="true" />;
 }
 
 export function Status({ tone, children }: { tone: Tone; children: React.ReactNode }) {

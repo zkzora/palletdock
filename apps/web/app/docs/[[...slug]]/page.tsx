@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DOCS, DOC_GROUPS, type Block } from '@/lib/docs';
 import { DocsShell, Inline, useWidth } from '@/components/docs-shell';
 
@@ -159,6 +159,23 @@ export default function DocsPage() {
   const toc = doc ? doc.blocks.map((b, i) => (b[0] === 'h' ? { text: b[1] as string, hid: hids[i] } : null)).filter(Boolean) as Array<{ text: string; hid: string }> : [];
   const sideOn = w >= 900;
   const tocOn = w >= 1180;
+  const [activeHid, setActiveHid] = useState('');
+  useEffect(() => {
+    // Scroll-spy: highlight the section heading nearest the top of the viewport.
+    if (!tocOn || typeof IntersectionObserver === 'undefined') return;
+    const heads = Array.from(document.querySelectorAll<HTMLElement>('article h2[id]'));
+    if (!heads.length) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveHid((visible[0].target as HTMLElement).id);
+      },
+      { rootMargin: '-80px 0px -65% 0px', threshold: 0 },
+    );
+    heads.forEach((h) => io.observe(h));
+    setActiveHid(heads[0].id);
+    return () => io.disconnect();
+  }, [slug, tocOn]);
 
   return (
     <DocsShell>
@@ -192,7 +209,7 @@ export default function DocsPage() {
         )}
 
         <main style={{ flex: '1 1 auto', minWidth: 0, padding: '36px 0 96px', display: 'flex', justifyContent: 'center' }}>
-          <article style={{ width: '100%', maxWidth: 740, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <article key={slug} className="page-enter" style={{ width: '100%', maxWidth: 740, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {!sideOn && (
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
                 <span style={{ font: "500 10.5px 'JetBrains Mono',monospace", letterSpacing: '.08em', textTransform: 'uppercase', color: '#8a8f98' }}>Page</span>
@@ -268,6 +285,7 @@ export default function DocsPage() {
               <button
                 key={t.hid}
                 className="docs-toc-link"
+                aria-current={activeHid === t.hid ? 'true' : undefined}
                 onClick={() => {
                   const el = document.getElementById(t.hid);
                   if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });

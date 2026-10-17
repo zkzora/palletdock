@@ -3,13 +3,16 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Fragment, useEffect, useState } from 'react';
+import { useScrolledHeader, useSpotlight } from '@/components/motion';
 
 /** Header, status strip, and footer from the PalletDock Docs design export. */
 export function DocsShell({ children, section = 'Docs' }: { children: React.ReactNode; section?: string }) {
   const w = useWidth();
+  const header = useScrolledHeader<HTMLElement>();
+  useSpotlight();
   return (
     <div style={{ minHeight: '100vh', background: 'var(--background)', fontSize: 15 }}>
-      <header style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(14,15,17,.92)', backdropFilter: 'blur(8px)', borderBottom: '1px solid #222429' }}>
+      <header ref={header} className="scrolled-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(14,15,17,.92)', backdropFilter: 'blur(8px)', borderBottom: '1px solid #222429' }}>
         <div style={{ maxWidth: 1320, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
             <Link href="/" aria-label="PalletDock home" style={{ display: 'flex', textDecoration: 'none' }}>

@@ -1,5 +1,8 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { Reveal, useHeroParallax, useScrolledHeader, useSpotlight, useTilt } from '@/components/motion';
 
 const REPO_URL = process.env.NEXT_PUBLIC_PALLETDOCK_REPO_URL ?? 'https://github.com/zkzora/palletdock';
 
@@ -34,9 +37,14 @@ const planned = [
 ];
 
 export default function LandingPage() {
+  const header = useScrolledHeader<HTMLElement>();
+  const hero = useHeroParallax<HTMLElement>();
+  const tilt = useTilt<HTMLDivElement>();
+  const spotlight = useSpotlight<HTMLElement>();
+  const i = (n: number) => ({ '--i': n }) as React.CSSProperties;
   return (
     <div style={{ minHeight: '100vh' }}>
-      <header style={{ position: 'sticky', top: 0, zIndex: 20, borderBottom: '1px solid var(--border)', background: 'rgba(14,15,17,.9)', backdropFilter: 'blur(8px)' }}>
+      <header ref={header} className="scrolled-header" style={{ position: 'sticky', top: 0, zIndex: 20, borderBottom: '1px solid var(--border)', background: 'rgba(14,15,17,.9)', backdropFilter: 'blur(8px)' }}>
         <div className="container" style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <Link href="/" aria-label="PalletDock home">
             <Image src="/palletdock-logo.png" alt="PalletDock" width={2172} height={724} priority style={{ width: 'auto', height: 46, filter: 'invert(1)', margin: '-8px' }} />
@@ -60,18 +68,21 @@ export default function LandingPage() {
           </nav>
         </div>
       </header>
-      <main>
-        <section className="container" style={{ paddingBlock: '88px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
-          <div className="eyebrow">Developer workspace for Portaldot</div>
-          <h1 style={{ margin: 0, maxWidth: 900, fontSize: 'clamp(38px,6vw,64px)', fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1.04, textWrap: 'balance' }}>
+      <main ref={spotlight}>
+        <section ref={hero} className="hero-wrap">
+        <div className="hero-grid" aria-hidden="true" />
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="container" style={{ paddingBlock: '88px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div className="eyebrow enter" style={i(0)}>Developer workspace for Portaldot</div>
+          <h1 className="enter" style={{ ...i(1), margin: 0, maxWidth: 900, fontSize: 'clamp(38px,6vw,64px)', fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1.04, textWrap: 'balance' }}>
             Deploy, index and monitor Portaldot contracts in one workspace.
           </h1>
-          <p className="muted" style={{ margin: 0, maxWidth: 680, fontSize: 17, lineHeight: 1.6 }}>
+          <p className="muted enter" style={{ ...i(2), margin: 0, maxWidth: 680, fontSize: 17, lineHeight: 1.6 }}>
             Organize contracts by project, call them from Contract Studio, follow each transaction to its indexed event, query the results over an API, and watch RPC probes, on the Portaldot V3 Testnet EVM layer.
           </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Link href="/login" className="button">
-              Open the workspace
+          <div className="enter" style={{ ...i(3), display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link href="/login" className="button arrow-link">
+              Open the workspace <span className="arrow" aria-hidden="true">→</span>
             </Link>
             <Link href="/docs" className="button secondary">
               Read the docs
@@ -80,16 +91,17 @@ export default function LandingPage() {
               Repository
             </a>
           </div>
-          <div className="notice" style={{ maxWidth: 780 }}>
+          <div className="notice enter" style={{ ...i(4), maxWidth: 780 }}>
             <span className="status-dot warning" aria-hidden="true" />
             <span>
-              <strong>Testnet MVP, self-hosted.</strong> The workflows below are implemented and tested against a local fixture chain. Acceptance on Portaldot V3 Testnet itself is pending RPC availability and a human-approved wallet transaction. Not audited, not production-ready, no mainnet support. PalletDock is independent tooling, not an official Portaldot product.
+              <strong>Testnet MVP, self-hosted.</strong> The workflows below are implemented and tested against a local fixture chain, and the network identity is verified live on Portaldot V3 Testnet. The wallet-signed deployment run on the live testnet is still pending. Not audited, not production-ready, no mainnet support. PalletDock is independent tooling, not an official Portaldot product.
             </span>
           </div>
+        </div>
         </section>
 
-        <section aria-label="Product preview" className="container" style={{ paddingBottom: 96 }}>
-          <div className="card" style={{ overflow: 'hidden', background: '#111214' }}>
+        <section aria-label="Product preview" className="container enter" style={{ ...i(5), paddingBottom: 96 }}>
+          <div ref={tilt} className="card tilt" style={{ overflow: 'hidden', background: '#111214' }}>
             <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', color: 'var(--dim)', fontSize: 12.5 }}>
               <span>
                 Project workspace <span style={{ color: '#55595f', paddingInline: 8 }}>/</span>
@@ -107,7 +119,7 @@ export default function LandingPage() {
                 ['04 · API', 'Scoped keys', 'Stable cursors'],
                 ['05 · Monitoring', 'Recorded', 'Probes, lag, errors'],
               ].map(([k, v, n]) => (
-                <div key={k} style={{ minHeight: 118, padding: 16, border: '1px solid var(--border)', margin: '0 -1px -1px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div key={k} className="spot flat" style={{ minHeight: 118, padding: 16, border: '1px solid var(--border)', margin: '0 -1px -1px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <span className="mono dim" style={{ fontSize: 11 }}>
                     {k}
                   </span>
@@ -127,16 +139,16 @@ export default function LandingPage() {
 
         <section id="workflow" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="container" style={{ paddingBlock: 88, display: 'flex', flexDirection: 'column', gap: 36 }}>
-            <div style={{ maxWidth: 650, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="eyebrow">Workflow</div>
-              <h2 className="section-title">One contract, followed from deployment to an application query.</h2>
-              <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>
+            <Reveal style={{ maxWidth: 650, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="eyebrow reveal">Workflow</div>
+              <h2 className="section-title reveal" style={i(1)}>One contract, followed from deployment to an application query.</h2>
+              <p className="muted reveal" style={{ ...i(2), margin: 0, lineHeight: 1.6 }}>
                 Each step uses the records the previous one created, and keeps the network, block, transaction, and freshness context the next one needs.
               </p>
-            </div>
-            <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(250px,100%),1fr))', borderTop: '1px solid var(--border)', borderLeft: '1px solid var(--border)' }}>
-              {workflow.map(([n, t, b]) => (
-                <li key={n} style={{ minHeight: 180, padding: 22, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            </Reveal>
+            <Reveal as="ol" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(250px,100%),1fr))', borderTop: '1px solid var(--border)', borderLeft: '1px solid var(--border)' }}>
+              {workflow.map(([n, t, b], k) => (
+                <li key={n} className="reveal spot flat" style={{ ...i(k), minHeight: 180, padding: 22, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <span className="mono dim" style={{ fontSize: 12 }}>
                     {n}
                   </span>
@@ -146,19 +158,19 @@ export default function LandingPage() {
                   </span>
                 </li>
               ))}
-            </ol>
+            </Reveal>
           </div>
         </section>
 
         <section id="capabilities" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="container" style={{ paddingBlock: 88, display: 'flex', flexDirection: 'column', gap: 36 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="eyebrow">Capabilities</div>
-              <h2 className="section-title">Status you can trace back to a record.</h2>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))', gap: 20 }}>
-              {capabilities.map(([t, b]) => (
-                <article className="card" key={t} style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Reveal style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="eyebrow reveal">Capabilities</div>
+              <h2 className="section-title reveal" style={i(1)}>Status you can trace back to a record.</h2>
+            </Reveal>
+            <Reveal style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(260px,100%),1fr))', gap: 20 }}>
+              {capabilities.map(([t, b], k) => (
+                <article className="card spot reveal" key={t} style={{ ...i(k), padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 17 }}>{t}</h3>
                   <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>
                     {b}
@@ -169,18 +181,18 @@ export default function LandingPage() {
                   </span>
                 </article>
               ))}
-            </div>
+            </Reveal>
           </div>
         </section>
 
         <section id="scope" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="container" style={{ paddingBlock: 88, display: 'flex', flexDirection: 'column', gap: 32 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div className="eyebrow">Scope</div>
-              <h2 className="section-title">What is built, and what is not.</h2>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(320px,100%),1fr))', gap: 20 }}>
-              <article className="card" style={{ padding: 22 }}>
+            <Reveal style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="eyebrow reveal">Scope</div>
+              <h2 className="section-title reveal" style={i(1)}>What is built, and what is not.</h2>
+            </Reveal>
+            <Reveal style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(320px,100%),1fr))', gap: 20 }}>
+              <article className="card spot reveal" style={{ padding: 22 }}>
                 <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Implemented</h3>
                 <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8, color: '#c4c8ce', lineHeight: 1.5, fontSize: 14 }}>
                   {implemented.map((x) => (
@@ -188,7 +200,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </article>
-              <article className="card" style={{ padding: 22, borderStyle: 'dashed' }}>
+              <article className="card spot reveal" style={{ ...i(1), padding: 22, borderStyle: 'dashed' }}>
                 <h3 style={{ margin: '0 0 12px', fontSize: 16 }}>Planned, not built</h3>
                 <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8, color: '#c4c8ce', lineHeight: 1.5, fontSize: 14 }}>
                   {planned.map((x) => (
@@ -196,15 +208,15 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </article>
-            </div>
-            <div className="card" style={{ padding: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            </Reveal>
+            <div className="card spot" style={{ padding: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 18 }}>Run it on your machine</h3>
                 <p className="muted" style={{ margin: '6px 0 0' }}>Self-hosted: PostgreSQL, API, worker, and web app. Setup takes a few commands.</p>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <Link href="/docs/getting-started" className="button">
-                  Setup guide
+                <Link href="/docs/getting-started" className="button arrow-link">
+                  Setup guide <span className="arrow" aria-hidden="true">→</span>
                 </Link>
                 <Link href="/login" className="button secondary">
                   Open workspace

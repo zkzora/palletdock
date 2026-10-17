@@ -1,0 +1,136 @@
+/*
+ * PalletDock motion. Patterns follow the reference sites (Supabase landing,
+ * Railway docs): short ease-out transitions (150–300 ms), hover spotlights on
+ * cards, arrows that slide in, staggered reveals. Every effect is disabled for
+ * prefers-reduced-motion (see the end of this file and globals.css).
+ */
+:root {
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+  --dur-slow: 600ms;
+}
+
+/* ---------------------------------------------------------------- entrances */
+@keyframes pd-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pd-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pd-scale-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes pd-slide-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+
+/* Staggered hero entrance: set --i on each child. */
+.enter { opacity: 0; animation: pd-fade-up var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 80ms + 60ms); }
+
+/* Scroll reveal: Reveal adds .in when the element enters the viewport. */
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out); transition-delay: calc(var(--i, 0) * 70ms); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* Route content fade in the workspace. */
+.page-enter { animation: pd-fade-up 380ms var(--ease-out) both; }
+
+/* ---------------------------------------------------------------- spotlight cards (Supabase bento) */
+.spot { position: relative; isolation: isolate; transition: border-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out); }
+.spot::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity var(--dur) var(--ease-out);
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(236, 237, 238, .07), transparent 45%); }
+.spot:hover::before { opacity: 1; }
+.spot:hover { border-color: #3a3d43 !important; transform: translateY(-2px); box-shadow: 0 12px 32px -18px rgba(0, 0, 0, .7); }
+.spot.flat:hover { transform: none; }
+
+/* Existing workspace/doc cards share the spotlight (selector list mirrors SPOT_SELECTOR). */
+.contract-card, .metric, .stat, .choice, .docs-card, .empty-state { position: relative; isolation: isolate; transition: border-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out), background-color var(--dur) var(--ease-out); }
+.contract-card::before, .metric::before, .stat::before, .choice::before, .docs-card::before, .empty-state::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity var(--dur) var(--ease-out);
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(236, 237, 238, .065), transparent 45%); }
+.contract-card:hover::before, .metric:hover::before, .stat:hover::before, .choice:hover::before, .docs-card:hover::before, .empty-state:hover::before { opacity: 1; }
+.contract-card:hover, .docs-card:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -18px rgba(0, 0, 0, .7); }
+.metric:hover, .stat:hover { border-color: #3a3d43; }
+
+/* Grids of cells (flow-grid) light up per cell without lifting. */
+.flow-grid > a { transition: background-color var(--dur) var(--ease-out); }
+.flow-grid > a strong { transition: transform var(--dur) var(--ease-out); }
+.flow-grid > a:hover strong { transform: translateX(2px); }
+
+/* ---------------------------------------------------------------- arrows that slide in (Supabase/Railway links) */
+.arrow-link { display: inline-flex; align-items: center; gap: 6px; }
+.arrow-link .arrow { display: inline-block; opacity: .55; transform: translateX(-2px); transition: transform var(--dur) var(--ease-out), opacity var(--dur) var(--ease-out); }
+.arrow-link:hover .arrow, .group:hover .arrow { opacity: 1; transform: translateX(3px); }
+
+/* ---------------------------------------------------------------- buttons */
+.button, .row-action, .mini-button, .wallet-chip, .icon-button, .segmented button, .tabs button, .choice, .check-chip {
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.button:hover:not(:disabled) { filter: brightness(1.06); }
+.button.secondary:hover:not(:disabled), .button.ghost:hover:not(:disabled) { border-color: #4a4e55; color: var(--foreground); }
+.button:active:not(:disabled), .row-action:active:not(:disabled), .mini-button:active, .wallet-chip:active, .choice:active { transform: scale(.98); }
+.choice:hover { border-color: #3a3d43; background: #191b1f; }
+.choice[aria-pressed="true"] { box-shadow: 0 0 0 1px var(--foreground) inset; }
+
+/* Tabs: underline slides in. */
+.tabs button { position: relative; border-bottom-color: transparent !important; }
+.tabs button::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--foreground); transform: scaleX(0); transition: transform var(--dur) var(--ease-out); }
+.tabs button[aria-selected="true"]::after { transform: scaleX(1); }
+.tabs button:hover { color: var(--foreground); }
+
+/* ---------------------------------------------------------------- navigation */
+.workspace-nav a, .all-projects, .sidebar-foot a { position: relative; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.workspace-nav a::before { content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 2px; border-radius: 2px; background: var(--foreground); transform: scaleY(0); transition: transform var(--dur) var(--ease-out); }
+.workspace-nav a[aria-current="page"]::before { transform: scaleY(1); }
+.workspace-nav a svg { transition: transform var(--dur) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.workspace-nav a:hover svg { transform: translateX(1px) scale(1.06); }
+.docs-nav-link { transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.docs-nav-link:hover { transform: translateX(2px); }
+.docs-toc-link { transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.docs-toc-link[aria-current="true"] { color: var(--foreground) !important; border-left-color: var(--foreground) !important; }
+
+/* Rows. */
+.row-link, .activity-row, .project-row { transition: background-color var(--dur-fast) var(--ease-out); }
+.row-link:hover, a.activity-row:hover { background: #1a1c20; }
+
+/* ---------------------------------------------------------------- overlays */
+.modal-scrim { animation: pd-fade 180ms var(--ease-out) both; }
+.modal { animation: pd-scale-in 240ms var(--ease-out) both; }
+.toast { animation: pd-slide-in 260ms var(--ease-out) both; }
+.notice { animation: pd-fade 240ms var(--ease-out) both; }
+
+/* ---------------------------------------------------------------- live status pulse */
+@keyframes pd-pulse { 0% { box-shadow: 0 0 0 0 var(--pulse, rgba(108, 178, 245, .55)); } 80%, 100% { box-shadow: 0 0 0 7px transparent; } }
+.status-dot.live { animation: pd-pulse 1.8s var(--ease-out) infinite; }
+.status-dot.live.success { --pulse: rgba(76, 207, 138, .5); }
+.status-dot.live.warning { --pulse: rgba(240, 180, 41, .5); }
+
+/* Coverage bar fills smoothly. */
+.coverage-bar > div { transition: width 700ms var(--ease-out); }
+.chart > div { transition: height 500ms var(--ease-out), background-color var(--dur-fast); transform-origin: bottom; animation: pd-grow 600ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 12ms); }
+.chart > div:hover { filter: brightness(1.3); }
+@keyframes pd-grow { from { transform: scaleY(0); } to { transform: none; } }
+
+/* Skeleton shimmer instead of a flat pulse. */
+.skeleton { background: linear-gradient(90deg, #1d1f23 0%, #26292e 50%, #1d1f23 100%); background-size: 200% 100%; animation: pd-shimmer 1.4s linear infinite; }
+@keyframes pd-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---------------------------------------------------------------- landing hero backdrop */
+.hero-wrap { position: relative; overflow: hidden; }
+.hero-grid { position: absolute; inset: -20% 0 auto 0; height: 140%; pointer-events: none; z-index: 0;
+  background-image: linear-gradient(rgba(236, 237, 238, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(236, 237, 238, .045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
+  transform: translate3d(0, var(--py, 0px), 0); will-change: transform; }
+.hero-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(600px circle at var(--gx, 50%) var(--gy, 20%), rgba(108, 178, 245, .07), transparent 60%), radial-gradient(500px circle at 80% 0%, rgba(76, 207, 138, .045), transparent 60%);
+  transition: background-position var(--dur) var(--ease-out); }
+.hero-wrap > .container { position: relative; z-index: 1; }
+
+/* Tilt preview (pointer parallax). */
+.tilt { transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(var(--ty, 0px)); transition: transform 500ms var(--ease-out), box-shadow var(--dur) var(--ease-out); will-change: transform; }
+.tilt:hover { box-shadow: 0 30px 80px -40px rgba(0, 0, 0, .9); }
+
+/* Header gets a stronger edge once the page scrolls. */
+.scrolled-header { transition: background-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.scrolled-header.is-scrolled { box-shadow: 0 1px 0 #222429, 0 10px 30px -20px rgba(0, 0, 0, .8); }
+
+@media (prefers-reduced-motion: reduce) {
+  .enter, .reveal, .page-enter, .modal, .modal-scrim, .toast, .notice, .chart > div { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .status-dot.live { animation: none; }
+  .spot:hover, .tilt, .hero-grid { transform: none !important; }
+  .skeleton { animation: none; }
+}

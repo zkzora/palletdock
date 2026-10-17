@@ -10,6 +10,7 @@ import type { Owner, Project } from '@/lib/types';
 import { WalletProvider, useWallet } from '@/lib/wallet';
 import { shortAddr } from '@/lib/format';
 import { CopyButton, Modal, Notice } from '@/components/ui';
+import { useSpotlight } from '@/components/motion';
 import { PORTALDOT_ADD_CHAIN_PARAMS } from '@/lib/wallet-core';
 
 interface WorkspaceValue {
@@ -51,6 +52,7 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const spotlight = useSpotlight<HTMLElement>();
   const search = useSearchParams();
   const router = useRouter();
   const wallet = useWallet();
@@ -264,7 +266,11 @@ function Shell({ children }: { children: React.ReactNode }) {
               <span>Indexer jobs are stopped and workspace data is read-only. On-chain resources are unchanged.</span>
             </div>
           )}
-          <main className="workspace-main">{children}</main>
+          <main ref={spotlight} className="workspace-main">
+            <div key={pathname} className="page-enter">
+              {children}
+            </div>
+          </main>
         </div>
         {signerOpen && <SignerDialog onClose={() => setSignerOpen(false)} />}
       </div>
