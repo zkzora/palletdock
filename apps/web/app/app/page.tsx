@@ -8,6 +8,7 @@ import { execLabel } from '@/components/tx-progress';
 import { CopyButton, Notice, type Tone } from '@/components/ui';
 import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
+import { NETWORK } from '@/lib/network';
 import { ago, groupDigits, shortAddr, shortHash, when } from '@/lib/format';
 
 interface Overview {
@@ -57,7 +58,7 @@ export default function OverviewPage() {
           <h1 className="page-title">{project.name}</h1>
           <p>{project.description || 'No project description.'}</p>
           <div className="badge-row">
-            <span className="badge">Portaldot V3 Testnet</span>
+            <span className="badge">{NETWORK.label}</span>
             <span className="badge">EVM layer</span>
           </div>
         </div>
@@ -136,7 +137,7 @@ export default function OverviewPage() {
                 <dl className="kv">
                   <div>
                     <dt>Network</dt>
-                    <dd>Portaldot V3 Testnet</dd>
+                    <dd>{NETWORK.label}</dd>
                   </div>
                   <div>
                     <dt>EVM chain ID</dt>

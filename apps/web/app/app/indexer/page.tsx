@@ -7,6 +7,7 @@ import { KV, Notice, Status, useToast, type Tone } from '@/components/ui';
 import { EmptyState, ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { ago, groupDigits, shortHash, when } from '@/lib/format';
+import { NETWORK } from '@/lib/network';
 
 interface Source {
   id: string;
@@ -245,7 +246,7 @@ export default function IndexerPage() {
                 ['Start block', groupDigits(src.start_block)],
                 ['End block', src.end_block ? groupDigits(src.end_block) : 'Follow latest observed'],
                 ['Finality policy', 'included-with-explicit-finality: records stay "finality unknown" until a verified adapter exists'],
-                ['Network', 'Portaldot V3 Testnet · EVM chain 420420777'],
+                ['Network', `${NETWORK.label} · EVM chain ${NETWORK.chainId}`],
               ]}
             />
             <div className="form-actions">

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
 import { Notice } from '@/components/ui';
 import { api } from '@/lib/api';
+import { NETWORK } from '@/lib/network';
 
 export default function ImportContractPage() {
   const { project, projectId, readOnly, request, href, reloadProjects } = useWorkspace();
@@ -128,7 +129,7 @@ export default function ImportContractPage() {
         <section className="card panel" style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, lineHeight: 1.6, color: 'var(--muted)' }}>
           <h2 style={{ margin: 0, color: 'var(--foreground)' }}>What import does</h2>
           <p style={{ margin: 0 }}>Import attaches an address and ABI to this project so PalletDock can read, decode, and index the contract. It is off-chain organization and does not change contract ownership.</p>
-          <p style={{ margin: 0 }}>PalletDock checks the address format, the ABI structure, and that runtime code exists at the address on Portaldot V3 Testnet. It does not prove you own the address or that the ABI matches the deployed bytecode.</p>
+          <p style={{ margin: 0 }}>PalletDock checks the address format, the ABI structure, and that runtime code exists at the address on {NETWORK.label}. It does not prove you own the address or that the ABI matches the deployed bytecode.</p>
           <p style={{ margin: 0 }}>ABI attachment is not source verification. Verification stays unavailable until a V3 verifier is tested.</p>
           <p style={{ margin: 0 }}>
             A deployment block lets you start indexing at the right height. <Link href="/docs/deploy">What to save after deploying</Link>

@@ -68,7 +68,7 @@ export const DOCS: Doc[] = [
       ]],
       ['p', 'More help: [FAQ](/faq) · [Roadmap](/roadmap) · [Support](/support).'],
       ['h', 'Source of truth'],
-      ['p', `Use the [Portaldot V3 developer guide](${GUIDE}) for current chain-specific instructions. PalletDock's API is not an official Portaldot RPC specification. Shared upstream tooling does not make Portaldot the Polkadot network.`],
+      ['p', `Use the [Portaldot V3 developer guide](${GUIDE}) for current chain-specific instructions. PalletDock's API is not an official Portaldot RPC specification.`],
     ],
   },
 
@@ -579,7 +579,7 @@ export const DOCS: Doc[] = [
     title: 'Glossary',
     blocks: [
       ['grid', ['Term', 'Meaning'], [
-        ['Portaldot', 'The blockchain ecosystem targeted by PalletDock; not Polkadot.'],
+        ['Portaldot', 'The blockchain ecosystem targeted by PalletDock.'],
         ['PalletDock', 'The independent developer workspace in this repository.'],
         ['Testnet', 'A development network whose state and tokens should not be treated as production guarantees.'],
         ['tPOT', 'Portaldot V3\'s native test token.'],

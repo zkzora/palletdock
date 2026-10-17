@@ -10,6 +10,7 @@ import { ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
 import { TxProgress } from '@/components/tx-progress';
+import { NETWORK } from '@/lib/network';
 
 interface Sample {
   id: string;
@@ -222,7 +223,7 @@ export default function DeployPage() {
               Deployment is signed in your browser wallet.
             </Notice>
           )}
-          {wallet.account && !wallet.onPortaldot && <Notice tone="warning" title="Wallet is on a different network">You will be asked to switch to Portaldot V3 Testnet before signing.</Notice>}
+          {wallet.account && !wallet.onPortaldot && <Notice tone="warning" title="Wallet is on a different network">You will be asked to switch to {NETWORK.label} before signing.</Notice>}
           {failure && <Notice tone="danger">{failure}</Notice>}
           <div className="form-actions" style={{ marginTop: 0 }}>
             <button className="button secondary" onClick={() => setStep(1)}>

@@ -2,7 +2,9 @@
  * Framework-free wallet send logic (unit-tested). Classifies every outcome so
  * the UI can record it truthfully and never resubmits on ambiguity.
  */
-export const PORTALDOT_CHAIN_ID_HEX = '0x190f1ca9';
+import { NETWORK } from './network';
+
+export const PORTALDOT_CHAIN_ID_HEX = NETWORK.chainIdHex;
 
 export interface Eip1193 {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -71,9 +73,9 @@ export async function sendWithProvider(
 /** Network parameters for wallet_addEthereumChain. Wallets require 18 decimals for EVM native currency metadata. */
 export const PORTALDOT_ADD_CHAIN_PARAMS = {
   chainId: PORTALDOT_CHAIN_ID_HEX,
-  chainName: 'Portaldot V3 Testnet',
-  rpcUrls: ['https://test-evm-rpc-v3.portaldot.dev'],
-  nativeCurrency: { name: 'tPOT', symbol: 'tPOT', decimals: 18 },
+  chainName: NETWORK.walletName,
+  rpcUrls: [NETWORK.rpcUrl],
+  nativeCurrency: { name: NETWORK.symbol, symbol: NETWORK.symbol, decimals: 18 },
 };
 
 /** Wallets report "unknown chain" as 4902, nested in data/originalError, or only in the message. */
@@ -105,13 +107,13 @@ export async function switchOrAddChain(provider: Eip1193): Promise<SwitchResult>
       await provider.request({ method: 'wallet_addEthereumChain', params: [PORTALDOT_ADD_CHAIN_PARAMS] });
       added = true;
     } catch (e2) {
-      if (errCode(e2) === 4001) return { ok: false, reason: 'rejected', message: 'Adding Portaldot V3 Testnet was rejected in the wallet.' };
+      if (errCode(e2) === 4001) return { ok: false, reason: 'rejected', message: `Adding ${NETWORK.label} was rejected in the wallet.` };
       const msg = errMessage(e2);
       if (RPC_FAILURE_RE.test(msg)) {
         return {
           ok: false,
           reason: 'rpc_unreachable',
-          message: `The wallet could not add Portaldot V3 Testnet because it could not reach the RPC (${PORTALDOT_ADD_CHAIN_PARAMS.rpcUrls[0]}). Wallets check the RPC before adding a network. Try again when the Portaldot RPC responds. Wallet said: ${msg}`,
+          message: `The wallet could not add ${NETWORK.label} because it could not reach the RPC (${PORTALDOT_ADD_CHAIN_PARAMS.rpcUrls[0]}). Wallets check the RPC before adding a network. Try again when the Portaldot RPC responds. Wallet said: ${msg}`,
         };
       }
       return { ok: false, reason: 'add_failed', message: `The wallet could not add the network: ${msg}` };
@@ -119,7 +121,7 @@ export async function switchOrAddChain(provider: Eip1193): Promise<SwitchResult>
   }
   const now = String(await provider.request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase();
   if (now !== PORTALDOT_CHAIN_ID_HEX) {
-    return { ok: false, reason: 'still_wrong_chain', message: added ? 'The network was added but the wallet did not switch to it. Select Portaldot V3 Testnet in the wallet.' : `The wallet is still on chain ${now || 'unknown'}.` };
+    return { ok: false, reason: 'still_wrong_chain', message: added ? `The network was added but the wallet did not switch to it. Select ${NETWORK.walletName} in the wallet.` : `The wallet is still on chain ${now || 'unknown'}.` };
   }
   return { ok: true, added };
 }

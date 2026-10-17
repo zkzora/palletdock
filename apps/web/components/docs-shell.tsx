@@ -41,19 +41,13 @@ export function DocsShell({ children, section = 'Docs' }: { children: React.Reac
           </nav>
         </div>
       </header>
-      <div style={{ borderBottom: '1px solid #222429', background: '#15161a' }}>
-        <div style={{ maxWidth: 1320, margin: '0 auto', padding: '8px 24px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#b5b9c0' }}>
-          <span style={{ flex: 'none', font: "600 10px 'JetBrains Mono',monospace", letterSpacing: '.08em', padding: '2px 6px', borderRadius: 4, background: '#2a2d33', color: '#ecedee' }}>TESTNET MVP</span>
-          <span>Network details describe Portaldot V3. Workspace and API pages describe the implemented PalletDock MVP. Network identity is live-verified; the wallet-signed testnet run is pending.</span>
-        </div>
-      </div>
       {children}
       <footer style={{ borderTop: '1px solid #222429' }}>
-        <div style={{ maxWidth: 1320, margin: '0 auto', padding: 24, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', fontSize: 12.5, color: '#8a8f98' }}>
+        <div style={{ maxWidth: 1320, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5, color: '#8a8f98' }}>
+          <span>PalletDock · independent tooling. Its API is not an official Portaldot RPC specification.</span>
           <span>
-            PalletDock · independent tooling. Its API is not an official Portaldot RPC specification. <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link>
+            <Link href="/faq">FAQ</Link> · <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link>
           </span>
-          <span className="mono">Portaldot V3 Testnet · EVM chain 420420777</span>
         </div>
       </footer>
     </div>

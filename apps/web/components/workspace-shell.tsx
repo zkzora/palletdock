@@ -12,6 +12,7 @@ import { shortAddr } from '@/lib/format';
 import { CopyButton, Modal, Notice } from '@/components/ui';
 import { useSpotlight } from '@/components/motion';
 import { PORTALDOT_ADD_CHAIN_PARAMS } from '@/lib/wallet-core';
+import { NETWORK } from '@/lib/network';
 
 interface WorkspaceValue {
   owner: Owner;
@@ -230,9 +231,9 @@ function Shell({ children }: { children: React.ReactNode }) {
               </span>
             </button>
             <div className="mono">
-              Portaldot V3 Testnet
+              {NETWORK.label}
               <br />
-              EVM chain 420420777
+              EVM chain {NETWORK.chainId}
             </div>
           </div>
         </aside>
@@ -249,7 +250,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="header-actions">
               <Link className="network-chip" href={href('/app/network')} style={{ textDecoration: 'none' }}>
-                Portaldot V3 Testnet <span className="mono">0x190f1ca9</span>
+                {NETWORK.label} <span className="mono">{NETWORK.chainIdHex}</span>
               </Link>
               {signer}
             </div>
@@ -257,7 +258,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           {fixture && (
             <div className="archived-banner" role="note" style={{ background: '#1a1712', borderColor: '#3d3320', color: '#e6d3a8' }}>
               <strong>FIXTURE NETWORK</strong>
-              <span style={{ color: '#d9c9a6' }}>The EVM RPC is a local test chain, not Portaldot V3 Testnet. Results here are test fixtures, never live evidence.</span>
+              <span style={{ color: '#d9c9a6' }}>The EVM RPC is a local test chain, not the live Portaldot network. Results here are test fixtures, never live evidence.</span>
             </div>
           )}
           {project?.archived_at && (
@@ -288,13 +289,14 @@ function NetworkDetails() {
   const rows: Array<[string, string]> = [
     ['Network name', PORTALDOT_ADD_CHAIN_PARAMS.chainName],
     ['RPC URL', PORTALDOT_ADD_CHAIN_PARAMS.rpcUrls[0]],
-    ['Chain ID', '420420777'],
+    ['Chain ID', String(NETWORK.chainId)],
     ['Currency symbol', PORTALDOT_ADD_CHAIN_PARAMS.nativeCurrency.symbol],
+    ['Environment', NETWORK.environment],
   ];
   const down = probe && probe.status !== 'responded';
   return (
     <div className="card panel" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <strong style={{ fontSize: 13.5 }}>Portaldot V3 Testnet network details</strong>
+      <strong style={{ fontSize: 13.5 }}>{NETWORK.label} network details</strong>
       {probe === undefined ? null : !probe ? (
         <span className="dim" style={{ fontSize: 12 }}>EVM RPC status: not probed yet.</span>
       ) : (

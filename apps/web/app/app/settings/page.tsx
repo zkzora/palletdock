@@ -6,6 +6,7 @@ import { useWorkspace } from '@/components/workspace-shell';
 import { CopyButton, Modal, Notice, useToast } from '@/components/ui';
 import { EmptyState } from '@/components/page-state';
 import { api } from '@/lib/api';
+import { NETWORK } from '@/lib/network';
 
 export default function SettingsPage() {
   const { project, projectId, readOnly, request, reloadProjects, href } = useWorkspace();
@@ -90,7 +91,7 @@ export default function SettingsPage() {
         <div className="two-column" style={{ gap: 12 }}>
           <div>
             <div className="field-label">Network</div>
-            <div style={{ marginTop: 6 }}>Portaldot V3 Testnet</div>
+            <div style={{ marginTop: 6 }}>{NETWORK.label}</div>
             <div className="dim" style={{ marginTop: 3, fontSize: 11.5 }}>Fixed after creation. Records keep their network identity.</div>
           </div>
           <div>

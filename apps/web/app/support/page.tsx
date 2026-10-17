@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Para, PublicPage, Section } from '@/components/public-page';
+import { NETWORK } from '@/lib/network';
 
 const TYPES = ['Account', 'Deployment', 'Indexer', 'API', 'Dashboard', 'Other'];
 
@@ -44,7 +45,7 @@ export default function SupportPage() {
     }
     setErr('');
     let anyRedacted = false;
-    const lines = [`PalletDock issue report`, `Issue type: ${type}`, `Network: Portaldot V3 Testnet (EVM chain 420420777)`, `Prepared: ${new Date().toISOString()}`, ''];
+    const lines = [`PalletDock issue report`, `Issue type: ${type}`, `Network: ${NETWORK.walletName} (EVM chain ${NETWORK.chainId})`, `Prepared: ${new Date().toISOString()}`, ''];
     for (const f of FIELDS) {
       const raw = vals[f.key]?.trim();
       if (!raw) continue;
@@ -83,7 +84,7 @@ export default function SupportPage() {
           </label>
           <div>
             <span style={{ fontSize: 12.5, color: '#c4c8ce' }}>Network</span>
-            <div style={{ marginTop: 6, fontSize: 14 }}>Portaldot V3 Testnet</div>
+            <div style={{ marginTop: 6, fontSize: 14 }}>{NETWORK.label}</div>
           </div>
           {FIELDS.map((f) => (
             <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

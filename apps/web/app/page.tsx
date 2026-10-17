@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Reveal, useHeroParallax, useScrolledHeader, useSpotlight, useTilt } from '@/components/motion';
+import { NETWORK } from '@/lib/network';
 
 const REPO_URL = process.env.NEXT_PUBLIC_PALLETDOCK_REPO_URL ?? 'https://github.com/zkzora/palletdock';
 
@@ -81,7 +82,7 @@ export default function LandingPage() {
             Deploy, index and monitor Portaldot contracts in one workspace.
           </h1>
           <p className="muted enter" style={{ ...i(2), margin: 0, maxWidth: 680, fontSize: 17, lineHeight: 1.6 }}>
-            Organize contracts by project, call them from Contract Studio, follow each transaction to its indexed event, query the results over an API, and watch RPC probes, on the Portaldot V3 Testnet EVM layer.
+            Organize contracts by project, call them from Contract Studio, follow each transaction to its indexed event, query the results over an API, and watch RPC probes, on the Portaldot EVM layer.
           </p>
           <div className="enter" style={{ ...i(3), display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Link href="/login" className="button arrow-link">
@@ -96,7 +97,7 @@ export default function LandingPage() {
           </div>
           <div className="notice enter" style={{ ...i(4), maxWidth: 780 }}>
             <span>
-              <strong>Testnet MVP, self-hosted.</strong> The workflows below are implemented and tested against a local fixture chain, and the network identity is verified live on Portaldot V3 Testnet. The wallet-signed deployment run on the live testnet is still pending. Not audited, not production-ready, no mainnet support. PalletDock is independent tooling, not an official Portaldot product.
+              <strong>Self-hosted, independent tooling.</strong> PalletDock is not an official Portaldot product and has not been independently audited yet.
             </span>
           </div>
         </div>
@@ -110,7 +111,7 @@ export default function LandingPage() {
                 <strong style={{ color: 'var(--foreground)' }}>Overview</strong>
               </span>
               <span className="badge">
-                Portaldot V3 Testnet <span className="mono dim">0x190f1ca9</span>
+                {NETWORK.label} <span className="mono dim">{NETWORK.chainIdHex}</span>
               </span>
             </div>
             <div style={{ padding: 22, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))' }}>
@@ -227,11 +228,11 @@ export default function LandingPage() {
         </section>
       </main>
       <footer style={{ borderTop: '1px solid var(--border)' }}>
-        <div className="container" style={{ paddingBlock: 24, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', color: 'var(--dim)', fontSize: 12.5 }}>
+        <div className="container" style={{ paddingBlock: 24, display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--dim)', fontSize: 12.5 }}>
+          <span>PalletDock · independent developer tooling for Portaldot</span>
           <span>
-            PalletDock · independent developer tooling · <Link href="/docs">Docs</Link> · <Link href="/faq">FAQ</Link> · <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link> · <a href={REPO_URL}>Repository</a>
+            <Link href="/docs">Docs</Link> · <Link href="/faq">FAQ</Link> · <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link> · <a href={REPO_URL}>Repository</a>
           </span>
-          <span className="mono">Portaldot V3 Testnet · EVM chain 420420777 · Portaldot is not Polkadot</span>
         </div>
       </footer>
     </div>

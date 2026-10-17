@@ -4,7 +4,7 @@ import { Para, PublicPage, Section } from '@/components/public-page';
 
 const MILESTONES: Array<{ title: string; status: string; tone: string; items: string[]; exit: string }> = [
   {
-    title: 'Milestone 1: A proven testnet workflow',
+    title: 'Milestone 1: A proven end-to-end workflow',
     status: 'Implemented · live acceptance pending',
     tone: '#6cb2f5',
     items: [
@@ -16,7 +16,7 @@ const MILESTONES: Array<{ title: string; status: string; tone: string; items: st
       'A project-scoped read-only API.',
       'Monitoring for RPC health, transaction outcomes, and indexing progress.',
     ],
-    exit: 'A real testnet demo links a deployment, an interaction, an indexed event, and an API response, each with its network, address, hash, and freshness. Verified on a local fixture chain; the Portaldot V3 run waits for the public RPCs.',
+    exit: 'A real on-chain demo links a deployment, an interaction, an indexed event, and an API response, each with its network, address, hash, and freshness. Verified on a local fixture chain; the live Portaldot V3 run is in progress.',
   },
   {
     title: 'Milestone 2: Portaldot-native resource tools',
@@ -38,6 +38,13 @@ const MILESTONES: Array<{ title: string; status: string; tone: string; items: st
     tone: '#8a8f98',
     items: ['A project-aware copilot for documentation and error explanations.', 'Suggestions that cite their source and distinguish assumptions.', 'Read-only context access by default.', 'Explicit review before any generated code or transaction intent is used.'],
     exit: 'The assistant cannot expose secrets, silently change project settings, sign, or broadcast a transaction.',
+  },
+  {
+    title: 'Milestone 5: Portaldot mainnet',
+    status: 'Planned · after mainnet launch',
+    tone: '#8a8f98',
+    items: ['Network selection driven by configuration, with testnet and mainnet projects kept separate.', 'Mainnet identity verification (genesis hash, chain ID, runtime) before any indexing or tracking.', 'An independent security review before PalletDock is used with mainnet value.'],
+    exit: 'A mainnet project runs the same workflow with its network identity verified and the security review published.',
   },
 ];
 
@@ -63,7 +70,7 @@ export default function RoadmapPage() {
         </section>
       ))}
       <Section title="Not committed">
-        <Para text="Mainnet readiness, a PalletDock token, cross-chain custody, a built-in bridge, billing, a public SLA, dedicated WASM compilation, and support for every Portaldot runtime module are not commitments." />
+        <Para text="A PalletDock token, cross-chain custody, a built-in bridge, billing, a public SLA, dedicated WASM compilation, and support for every Portaldot runtime module are not commitments." />
       </Section>
       <Para text="[Open the workspace](/app) · [Read the docs](/docs)" />
     </PublicPage>

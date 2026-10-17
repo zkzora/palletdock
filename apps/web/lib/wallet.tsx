@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { NETWORK } from '@/lib/network';
 
 /**
  * Browser wallet (EIP-1193) connection. PalletDock never holds keys or seed
@@ -9,11 +10,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
  */
 
 export const PORTALDOT_CHAIN = {
-  chainIdHex: '0x190f1ca9',
-  chainId: 420420777,
-  chainName: 'Portaldot V3 Testnet',
-  rpcUrls: ['https://test-evm-rpc-v3.portaldot.dev'],
-  nativeCurrency: { name: 'tPOT', symbol: 'tPOT', decimals: 18 },
+  chainIdHex: NETWORK.chainIdHex,
+  chainId: NETWORK.chainId,
+  chainName: NETWORK.walletName,
+  rpcUrls: [NETWORK.rpcUrl],
+  nativeCurrency: { name: NETWORK.symbol, symbol: NETWORK.symbol, decimals: 18 },
 };
 
 declare global {

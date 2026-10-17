@@ -9,6 +9,7 @@ import { execLabel } from '@/components/tx-progress';
 import { EmptyState, ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { groupDigits, shortHash, when } from '@/lib/format';
+import { NETWORK } from '@/lib/network';
 
 type Filter = 'all' | 'success' | 'reverted' | 'pending' | 'unknown' | 'rejected' | 'prepared';
 
@@ -139,7 +140,7 @@ export default function TransactionsPage() {
           }
         >
           <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>
-            Track a transaction that was sent outside PalletDock. It must exist on Portaldot V3 Testnet; its input is decoded when it calls a contract tracked in this project.
+            Track a transaction that was sent outside PalletDock. It must exist on {NETWORK.label}; its input is decoded when it calls a contract tracked in this project.
           </p>
           <div className="field">
             <label htmlFor="reg-hash">Transaction hash</label>

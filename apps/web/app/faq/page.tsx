@@ -4,10 +4,9 @@ import { Para, PublicPage, Section } from '@/components/public-page';
 
 const QA: Array<[string, string]> = [
   ['What is PalletDock?', 'PalletDock is a self-hosted developer workspace for Portaldot. It connects contract deployment and interaction, event indexing, read-only application APIs, and project monitoring in one project.'],
-  ['Is Portaldot the same as Polkadot?', 'No. The network here is Portaldot V3 Testnet. Shared Substrate tooling does not make it the Polkadot network. Use the Portaldot endpoint, chain ID, account rules, and developer guide.'],
-  ['What is available now?', 'The testnet MVP is implemented: projects, wallet-signed deploys and writes, receipt tracking, an EVM log indexer with reorg handling, a scoped read API, and monitoring. It passes automated tests on a local fixture chain. Live acceptance on Portaldot V3 Testnet is pending because the public RPCs were unavailable. See [Limitations](/docs/limitations).'],
+  ['What is available now?', 'Projects, wallet-signed deploys and writes, receipt tracking, an EVM log indexer with reorg handling, a scoped read API, and monitoring. See [Limitations](/docs/limitations) for what is not covered yet.'],
   ['Is PalletDock a bridge?', 'No. Its purpose is the developer workflow. A bridge, light client, or cross-chain integration may use indexing and APIs, but it is not part of PalletDock.'],
-  ['Which network comes first?', 'Portaldot V3 Testnet, with EVM chain ID `420420777`. Mainnet support and other networks have not been committed.'],
+  ['Which networks are supported?', 'Portaldot V3 (EVM chain ID `420420777`, currently the testnet). Portaldot mainnet support is planned once mainnet launches; see the [Roadmap](/roadmap).'],
   ['Which wallet should I use?', 'An EVM browser wallet (for example MetaMask) for the Solidity path. PalletDock shows the selected signing account and network before every approval. Native (SS58) signing is Planned.'],
   ['Which address should receive my test tokens?', 'For a MetaMask deployer funded through a native transfer, use the account PalletDock resolves with `reviveApi.accountId` (Overview → Account mapping). Follow the distributor\'s current address-format instructions; do not guess a mapped account.'],
   ['Where is the faucet?', 'The team announcement supplied for this project describes manual requests in Portaldot\'s Discord with distribution once every 24 hours. There is no confirmed public faucet URL. Recheck the current channel and schedule before requesting.'],
@@ -22,7 +21,7 @@ const QA: Array<[string, string]> = [
 
 export default function FaqPage() {
   return (
-    <PublicPage eyebrow="FAQ" title="Frequently Asked Questions" intro="Answers about PalletDock, the Portaldot V3 testnet, and the first developer workflow.">
+    <PublicPage eyebrow="FAQ" title="Frequently Asked Questions" intro="Answers about PalletDock, Portaldot, and the developer workflow.">
       {QA.map(([q, a]) => (
         <Section key={q} title={q}>
           <Para text={a} />
