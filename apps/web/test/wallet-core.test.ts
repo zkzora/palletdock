@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isUnknownChainError, sendWithProvider, switchOrAddChain, type Eip1193 } from '../lib/wallet-core';
+import { connectWithTimeout, isUnknownChainError, sendWithProvider, switchOrAddChain, type Eip1193 } from '../lib/wallet-core';
 
 const FROM = '0x7a3f09c2d4e81b6a5f3c90e7d12b48a6e0f9c315';
 const HASH = '0x' + 'ab'.repeat(32);
@@ -132,6 +132,28 @@ describe('switch or add Portaldot V3', () => {
     const { p, calls } = chainWallet({ unknownError: Object.assign(new Error('Request already pending'), { code: -32002 }) });
     expect(await switchOrAddChain(p)).toMatchObject({ ok: false, reason: 'switch_failed' });
     expect(calls).not.toContain('wallet_addEthereumChain');
+  });
+});
+
+describe('connect with timeout', () => {
+  const w = (requestAccounts: () => unknown): Eip1193 => ({
+    async request({ method }) {
+      if (method === 'eth_requestAccounts') return requestAccounts();
+      if (method === 'eth_chainId') return '0x190F1CA9';
+      throw new Error(method);
+    },
+  });
+  it('returns the account and chain on approval', async () => {
+    expect(await connectWithTimeout(w(() => [FROM.toUpperCase().replace('0X', '0x')]))).toEqual({ ok: true, account: FROM, chainId: '0x190f1ca9' });
+  });
+  it('stops waiting on a wallet that never answers and explains what to check', async () => {
+    const r = await connectWithTimeout(w(() => new Promise(() => {})), 20);
+    expect(r).toMatchObject({ ok: false, reason: 'timeout' });
+    expect((r as { message: string }).message).toMatch(/test-evm-rpc-v3\.portaldot\.dev/);
+  });
+  it('explains an already-pending request (-32002) and a rejection (4001)', async () => {
+    expect(await connectWithTimeout(w(() => Promise.reject(Object.assign(new Error('pending'), { code: -32002 }))))).toMatchObject({ ok: false, reason: 'pending' });
+    expect(await connectWithTimeout(w(() => Promise.reject(Object.assign(new Error('no'), { code: 4001 }))))).toMatchObject({ ok: false, reason: 'rejected' });
   });
 });
 

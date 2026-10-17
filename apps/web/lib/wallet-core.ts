@@ -123,3 +123,37 @@ export async function switchOrAddChain(provider: Eip1193): Promise<SwitchResult>
   }
   return { ok: true, added };
 }
+
+export type ConnectResult =
+  | { ok: true; account: string | null; chainId: string | null }
+  | { ok: false; reason: 'rejected' | 'pending' | 'timeout' | 'error'; message: string };
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([p, new Promise<'timeout'>((r) => (t = setTimeout(() => r('timeout'), ms)))]).finally(() => t && clearTimeout(t));
+}
+
+/**
+ * Ask the wallet for account access without waiting forever. A wallet that is
+ * locked, still loading, or stuck on an unreachable network RPC often never
+ * answers; the caller gets an actionable message instead of an endless spinner.
+ */
+export async function connectWithTimeout(provider: Eip1193, timeoutMs = 45_000): Promise<ConnectResult> {
+  try {
+    const accs = await withTimeout(provider.request({ method: 'eth_requestAccounts' }) as Promise<string[]>, timeoutMs);
+    if (accs === 'timeout') {
+      return {
+        ok: false,
+        reason: 'timeout',
+        message: `The wallet did not answer within ${Math.round(timeoutMs / 1000)} s. Open the wallet extension: unlock it, and if it is stuck loading ("Initializing"), check the selected network. A Portaldot V3 network saved with the retired RPC (feso-apps.xyz) never loads; edit its RPC URL to https://test-evm-rpc-v3.portaldot.dev or switch to another network, then try again.`,
+      };
+    }
+    const chain = await withTimeout(provider.request({ method: 'eth_chainId' }) as Promise<string>, 10_000).catch(() => 'timeout' as const);
+    return { ok: true, account: accs?.[0]?.toLowerCase() ?? null, chainId: chain === 'timeout' ? null : String(chain).toLowerCase() };
+  } catch (e) {
+    const code = errCode(e);
+    if (code === 4001) return { ok: false, reason: 'rejected', message: 'Connection request was rejected in the wallet.' };
+    if (code === -32002) return { ok: false, reason: 'pending', message: 'A connection request is already open in your wallet. Open the wallet extension and approve or reject it there.' };
+    return { ok: false, reason: 'error', message: errMessage(e) };
+  }
+}

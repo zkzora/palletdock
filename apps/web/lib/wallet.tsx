@@ -22,7 +22,7 @@ declare global {
   }
 }
 
-import { sendWithProvider, switchOrAddChain, type Eip1193, type SendOutcome, type SwitchResult } from './wallet-core';
+import { connectWithTimeout, sendWithProvider, switchOrAddChain, type Eip1193, type SendOutcome, type SwitchResult } from './wallet-core';
 export type { SendOutcome } from './wallet-core';
 
 interface WalletValue {
@@ -90,15 +90,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
     setConnecting(true);
     setError('');
-    try {
-      const accs = (await provider.request({ method: 'eth_requestAccounts' })) as string[];
-      setAccount(accs?.[0]?.toLowerCase() ?? null);
-      setChainId(String(await provider.request({ method: 'eth_chainId' })).toLowerCase());
-    } catch (e) {
-      setError(errCode(e) === 4001 ? 'Connection request was rejected in the wallet.' : errMessage(e));
-    } finally {
-      setConnecting(false);
-    }
+    const r = await connectWithTimeout(provider);
+    if (r.ok) {
+      setAccount(r.account);
+      setChainId(r.chainId);
+    } else setError(r.message);
+    setConnecting(false);
   }, [provider]);
 
   const switchNetwork = useCallback(async (): Promise<SwitchResult> => {
