@@ -770,6 +770,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         error: t.error_message,
         observations: obs.rows,
         logs: logs.rows,
+        trackingStatus: t.tracking_status,
         unitPolicy,
         unitNote: evmUnitNote(unitPolicy),
         feeTokens: evmTokenAmount(t.fee_raw, unitPolicy),
@@ -788,7 +789,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     try {
       if (t.hash) {
         const receipt = await evm.receipt(t.hash);
-        await pool.query(`UPDATE transactions SET last_checked_at=NULL WHERE id=$1`, [t.id]);
+        // An explicit recheck re-opens tracking, including terminal states (settled, history_pruned, gave_up).
+        await pool.query(`UPDATE transactions SET last_checked_at=NULL, tracking_status='active', check_failures=0, next_check_at=NULL WHERE id=$1`, [t.id]);
         await pool.query(
           `INSERT INTO transaction_observations(transaction_id,stage,detail,source) VALUES ($1,'reconcile',$2,'api')`,
           [t.id, receipt ? `Receipt found in block ${receipt.blockNumber}; the tracker will record it.` : 'No receipt yet. This is not proof the transaction failed.'],

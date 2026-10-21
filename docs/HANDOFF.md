@@ -53,6 +53,8 @@ On Linux the fixture stack stops its children by process group; on Windows use `
 1. **Finish the live walkthrough**: step 6.1 (worker restart with `store(43)` while stopped; the RPC-interruption check is done). Configure any new indexer source within ~26 minutes of its start block (node retains 258 blocks). Do not change the network or accept a reset without the owner's approval.
 2. ~~Verify the EVM unit policy~~ Done 2026-10-19: `eth_getBalance` = (native free − existential deposit) × 10⁴ (TESTNET_EVIDENCE.md).
 3. Replacement-transaction linking by nonce.
+
+Receipt tracking (2026-10-21): a missing receipt is a reorg only when the canonical block at that height has a different hash; pruned history is kept as `history_pruned`; every tracked hash ends in a terminal state (settled, history_pruned, gave_up). Use `pnpm --filter @palletdock/worker tx:restore-pruned` (dry run, then `--apply`) if older data was cleared by the previous tracker.
 4. A finality adapter: the node exposes `finalized`/`safe` tags and GRANDPA is present, but nothing is claimed until a tested adapter links EVM blocks to native finality.
 
 Network change on 2026-10-17: endpoints moved to `*.portaldot.dev` (owner-approved), native token symbol is `tPOT` (owner-approved), fingerprint `3fc49db4…` active.

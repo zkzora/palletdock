@@ -126,6 +126,10 @@ Manual checks at 2026-10-08T14:39Z, 14:40Z, 16:26Z, and 17:25Z returned `error c
 
 The Packet's `network.json` records an earlier successful read-only check (2026-10-04) of `eth_chainId` (`0x190f1ca9`) and `system_properties` (tPOTv3, 14 decimals, SS58 42). That is the only positive identity evidence available and it predates this implementation.
 
+## Receipt tracker defect found on the live run (2026-10-21)
+
+About 26 minutes after inclusion the node pruned both live transactions, and the old receipt tracker reported them as *Receipt disappeared (possible reorganization)* and cleared their block number, block hash, and receipt; it then polled them every ~4 s. Nothing had been reorganized: the contract still returned 42. The tracker now distinguishes pruned history from a real reorg (a different canonical hash at the recorded height), keeps the last snapshot as `history_pruned`, never deletes data on RPC errors, backs off with a hard stop, and ends tracking in a terminal state. Both transactions were restored from their observation log with recorded provenance and are `included` / `success` at blocks 133019 and 133023 again. Details, provenance export, and screenshots: [evidence/2026-10-21-tracker-fix](evidence/2026-10-21-tracker-fix/).
+
 ## Not yet run live
 
 Covered by deterministic tests (`apps/worker/test/indexer.test.ts`) and still open on the live network:

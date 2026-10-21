@@ -27,6 +27,10 @@ const STAGE_TONE: Record<string, Tone> = {
   contract_tracked: 'success',
   reconcile: 'info',
   receipt_mismatch: 'warning',
+  history_pruned: 'info',
+  tracking_settled: 'success',
+  tracking_stopped: 'warning',
+  restored_from_observations: 'info',
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -46,6 +50,10 @@ const STAGE_LABEL: Record<string, string> = {
   contract_tracked: 'Contract added to project',
   reconcile: 'Account activity checked',
   receipt_mismatch: 'Receipt does not match the reviewed request',
+  history_pruned: 'Node history pruned',
+  tracking_settled: 'Receipt checks settled',
+  tracking_stopped: 'Receipt checks stopped',
+  restored_from_observations: 'Restored from observation log',
 };
 
 export default function TransactionDetailPage() {
@@ -115,6 +123,16 @@ export default function TransactionDetailPage() {
           }
         >
           No receipt is available. This is not proof that the transaction failed. Do not resubmit until the original submission is understood.
+        </Notice>
+      )}
+      {t.trackingStatus === 'history_pruned' && (
+        <Notice tone="info" title="Node history pruned">
+          The RPC node no longer serves this receipt or block. PalletDock keeps the last observed inclusion (block number and hash) and has stopped checking. This is not a failure or a reorganization.
+        </Notice>
+      )}
+      {t.trackingStatus === 'gave_up' && (
+        <Notice tone="warning" title="Receipt checks stopped">
+          Checks stopped after repeated failures or no receipt within the waiting window. Stored data is unchanged. Use Check account activity to recheck.
         </Notice>
       )}
       {checkMsg && <Notice tone="info">{checkMsg}</Notice>}
@@ -196,7 +214,13 @@ export default function TransactionDetailPage() {
               <h2>Raw receipt</h2>
               <span className="mono">eth_getTransactionReceipt</span>
             </div>
-            {t.receipt ? <Pre max={380}>{pretty(t.receipt)}</Pre> : <p className="card-empty">No receipt is available yet. This is not proof that the transaction failed.</p>}
+            {t.receipt ? (
+              <Pre max={380}>{pretty(t.receipt)}</Pre>
+            ) : t.trackingStatus === 'history_pruned' ? (
+              <p className="card-empty">The receipt body was not retained, and the node no longer serves it (pruned history). Inclusion and execution above come from earlier observations.</p>
+            ) : (
+              <p className="card-empty">No receipt is available yet. This is not proof that the transaction failed.</p>
+            )}
           </section>
         </div>
       </div>

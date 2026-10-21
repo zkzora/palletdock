@@ -9,7 +9,8 @@
     "network:verify": "tsx src/network-verify.ts",
     "typecheck": "tsc --noEmit -p .",
     "network:accept-reset": "tsx src/network-reset.ts",
-    "network:capabilities": "tsx src/capabilities.ts"
+    "network:capabilities": "tsx src/capabilities.ts",
+    "tx:restore-pruned": "tsx src/restore-pruned-cli.ts"
   },
   "dependencies": {
     "@palletdock/chain": "workspace:*",

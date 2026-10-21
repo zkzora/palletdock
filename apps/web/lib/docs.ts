@@ -305,10 +305,11 @@ export const DOCS: Doc[] = [
       ['p', 'PalletDock tracks transactions it prepared and hashes you register explicitly (**Transactions → Register a hash**). It does not show all wallet activity.'],
       ['table', [
         ['Submission', 'prepared · rejected (nothing broadcast) · submitted (hash returned) · unknown (ambiguous wallet result)'],
-        ['Inclusion', 'not observed · pending · included · reorged_out (receipt disappeared)'],
+        ['Inclusion', 'not observed · pending · included · reorged_out (the canonical block at that height now has a different hash)'],
         ['Execution', 'unknown · success (status 0x1) · reverted (status 0x0, a fee may still be charged)'],
         ['Finality', 'unknown (no verified adapter; inclusion is not finality)'],
         ['Indexing', 'not covered · pending · indexed · no events'],
+        ['Receipt tracking', 'active · settled (confirmation depth reached) · history_pruned (the node no longer serves the receipt or block; the last inclusion is kept, not a failure) · gave_up (repeated failures or no receipt in time; data unchanged)'],
       ]],
       ['p', 'Timeline entries are observation times recorded by PalletDock, not chain timestamps. After an unknown result, use **Check account activity** before retrying; PalletDock never resubmits automatically. If the wallet answers late, the hash is attached to the same record. A receipt whose sender or recipient does not match the reviewed request is not applied.'],
       ['next', 'indexer', 'Indexing and finality'],

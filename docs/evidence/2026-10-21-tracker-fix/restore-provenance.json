@@ -1,0 +1,102 @@
+{
+  "exportedAt": "2026-10-21T16:42:04.926Z",
+  "restorations": [
+    {
+      "id": "12",
+      "hash": "0x25f03a786e57dd203bfe0a00da57208d1eaef22594fdfef512b7257cdec1f30f",
+      "stage": "restored_from_observations",
+      "source": "restore:observation-log",
+      "observed_at": "2026-10-21T16:40:11.254Z",
+      "detail": "Restored inclusion in block 133019 (0x538836c990f6d8981ad13535b091edeba58ddf9c4290e0e8f4c96d8893b7900f) and execution success from observations 3, 4, 10. The earlier \"receipt disappeared\" came from pruned node history (pruned), not a reorganization. The receipt body is not recoverable.",
+      "data": {
+        "method": "restore from observation log",
+        "chainCheck": "pruned",
+        "receiptBody": "not recoverable: cleared by the earlier tracker, and the node no longer serves it",
+        "nodeEvidence": "eth_getBlockByNumber(133019): Cannot construct OnlineClientAtBlock: failed to obtain spec version for block 7027fe35af90bed110211c17ebdd03d40106c5253602a6322c06325f4b4d394b: Backend error: RPC error: RPC error: User error: Client ",
+        "corroboration": {
+          "rawLogs": [],
+          "contractDeployBlock": [
+            "133019"
+          ]
+        },
+        "sourceObservations": {
+          "receipt": {
+            "id": "3",
+            "stage": "receipt_observed",
+            "detail": "Receipt observed in block 133019 (0x538836c990f6d8981ad13535b091edeba58ddf9c4290e0e8f4c96d8893b7900f). Inclusion only; finality not confirmed.",
+            "observedAt": "2026-10-21T14:48:37.794Z"
+          },
+          "execution": {
+            "id": "4",
+            "stage": "execution_succeeded",
+            "observedAt": "2026-10-21T14:48:37.794Z"
+          },
+          "disappearance": {
+            "id": "10",
+            "detail": "Receipt previously seen in 0x538836c990f6d8981ad13535b091edeba58ddf9c4290e0e8f4c96d8893b7900f is no longer returned (possible reorganization). The transaction may be re-included.",
+            "observedAt": "2026-10-21T15:14:38.587Z"
+          }
+        }
+      }
+    },
+    {
+      "id": "13",
+      "hash": "0x14ee38e9c689159661736d39859cb588aa73678d265cac96cd59f9cbd308fa47",
+      "stage": "restored_from_observations",
+      "source": "restore:observation-log",
+      "observed_at": "2026-10-21T16:40:11.363Z",
+      "detail": "Restored inclusion in block 133023 (0xbb34e101c516afdbca9c79df2d02d31ebc9e9246652c20eed92baf0713a5acde) and execution success from observations 8, 9, 11. The earlier \"receipt disappeared\" came from pruned node history (pruned), not a reorganization. The receipt body is not recoverable.",
+      "data": {
+        "method": "restore from observation log",
+        "chainCheck": "pruned",
+        "receiptBody": "not recoverable: cleared by the earlier tracker, and the node no longer serves it",
+        "nodeEvidence": "eth_getBlockByNumber(133023): Cannot construct OnlineClientAtBlock: failed to obtain spec version for block 844f0d1387ba8dc5ae047ecf6898c592b42e5b49614cc5e36d51401187f6729a: Backend error: RPC error: RPC error: User error: Client ",
+        "corroboration": {
+          "rawLogs": [
+            {
+              "h": "0xbb34e101c516afdbca9c79df2d02d31ebc9e9246652c20eed92baf0713a5acde",
+              "n": "133023"
+            }
+          ],
+          "contractDeployBlock": []
+        },
+        "sourceObservations": {
+          "receipt": {
+            "id": "8",
+            "stage": "receipt_observed",
+            "detail": "Receipt observed in block 133023 (0xbb34e101c516afdbca9c79df2d02d31ebc9e9246652c20eed92baf0713a5acde). Inclusion only; finality not confirmed.",
+            "observedAt": "2026-10-21T14:49:02.182Z"
+          },
+          "execution": {
+            "id": "9",
+            "stage": "execution_succeeded",
+            "observedAt": "2026-10-21T14:49:02.182Z"
+          },
+          "disappearance": {
+            "id": "11",
+            "detail": "Receipt previously seen in 0xbb34e101c516afdbca9c79df2d02d31ebc9e9246652c20eed92baf0713a5acde is no longer returned (possible reorganization). The transaction may be re-included.",
+            "observedAt": "2026-10-21T15:15:01.149Z"
+          }
+        }
+      }
+    }
+  ],
+  "transactionsAfter": [
+    {
+      "hash": "0x25f03a786e57dd203bfe0a00da57208d1eaef22594fdfef512b7257cdec1f30f",
+      "inclusion_status": "included",
+      "execution_status": "success",
+      "block_number": "133019",
+      "block_hash": "0x538836c990f6d8981ad13535b091edeba58ddf9c4290e0e8f4c96d8893b7900f",
+      "tracking_status": "history_pruned"
+    },
+    {
+      "hash": "0x14ee38e9c689159661736d39859cb588aa73678d265cac96cd59f9cbd308fa47",
+      "inclusion_status": "included",
+      "execution_status": "success",
+      "block_number": "133023",
+      "block_hash": "0xbb34e101c516afdbca9c79df2d02d31ebc9e9246652c20eed92baf0713a5acde",
+      "tracking_status": "history_pruned"
+    }
+  ]
+}
