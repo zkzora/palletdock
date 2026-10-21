@@ -231,6 +231,17 @@ describe('contracts', () => {
     await db.pool.query(`UPDATE indexer_sources SET desired_state='deleted', status='stopped' WHERE id=$1`, [ok.json().data.id]);
   });
 
+  it('tells the UI whether an indexer covers a transaction’s contract before its receipt is recorded', async () => {
+    const txId = (await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/contracts/${contractId}/prepare-write`, { function: 'store', args: ['5'], from: FROM })).json().data.transactionId;
+    const configured = async () => (await ws(sessionA, 'GET', `/workspace/projects/${A.projectId}/transactions/${txId}`)).json().data.indexerConfigured;
+    expect(await configured()).toBe(false);
+    const src = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources`, { contractId, events: ['NumberChanged'], startBlock: '60' });
+    expect(src.statusCode).toBe(201);
+    expect(await configured()).toBe(true);
+    await db.pool.query(`UPDATE indexer_sources SET desired_state='deleted', status='stopped' WHERE id=$1`, [src.json().data.id]);
+    expect(await configured()).toBe(false);
+  });
+
   it('validates uploaded artifacts and refuses runtime-only or unlinked bytecode', async () => {
     const runtimeOnly = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/artifacts`, { artifact: { abi: ABI, deployedBytecode: '0x6080' } });
     expect(runtimeOnly.json().error.message).toMatch(/runtime/);

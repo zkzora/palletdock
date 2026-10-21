@@ -4,56 +4,12 @@ import Link from 'next/link';
 import { useWorkspace } from '@/components/workspace-shell';
 import { useResource } from '@/lib/use-resource';
 import { groupDigits, shortHash } from '@/lib/format';
+import { statusCells, type StatusCell } from '@/lib/tx-status';
 import type { Tone } from '@/components/ui';
 
-export interface TxStatus {
-  submission: string;
-  inclusion: string;
-  execution: string;
-  finality: string;
-  indexing: string;
-}
+export { statusCells, type TxStatus } from '@/lib/tx-status';
 
-type Cell = { k: string; t: string; n: string; tone: Tone };
-
-export function statusCells(s: TxStatus, blockNumber: string | null, kind: string): Cell[] {
-  const sub: Cell =
-    s.submission === 'submitted'
-      ? { k: 'Submission', t: 'Hash returned by wallet', n: 'The wallet broadcast the transaction.', tone: 'success' }
-      : s.submission === 'unknown'
-        ? { k: 'Submission', t: 'Unconfirmed', n: 'The result is ambiguous. Check account activity before retrying.', tone: 'warning' }
-        : s.submission === 'rejected'
-          ? { k: 'Submission', t: 'Not submitted', n: 'Rejected or blocked before broadcast.', tone: 'idle' }
-          : { k: 'Submission', t: 'Prepared', n: 'Awaiting wallet approval; nothing broadcast.', tone: 'idle' };
-  const incl: Cell =
-    s.inclusion === 'included'
-      ? { k: 'Inclusion', t: `Included in block ${groupDigits(blockNumber)}`, n: 'Execution and finality are separate.', tone: 'success' }
-      : s.inclusion === 'reorged_out'
-        ? { k: 'Inclusion', t: 'Receipt disappeared', n: 'Possible reorganization. It may be re-included.', tone: 'warning' }
-        : s.inclusion === 'pending'
-          ? { k: 'Inclusion', t: 'Waiting for receipt', n: 'No receipt yet. This is not proof of failure.', tone: 'info' }
-          : { k: 'Inclusion', t: 'Not observed', n: s.submission === 'submitted' ? 'Receipt tracker has not checked yet.' : 'No hash to look up.', tone: 'idle' };
-  const exec: Cell =
-    s.execution === 'success'
-      ? { k: 'Execution', t: 'Succeeded', n: 'Receipt status 0x1.', tone: 'success' }
-      : s.execution === 'reverted'
-        ? { k: 'Execution', t: 'Reverted', n: 'Receipt status 0x0. A fee may still be charged.', tone: 'danger' }
-        : { k: 'Execution', t: 'Unknown', n: 'No receipt with a status yet.', tone: 'idle' };
-  const fin: Cell = { k: 'Finality', t: 'Not confirmed', n: 'No verified adapter links EVM blocks to native finality.', tone: 'unknown' };
-  const idx: Cell =
-    kind === 'deploy'
-      ? { k: 'Indexing', t: 'No event expected', n: 'Contract creation emits no tracked event.', tone: 'idle' }
-      : s.indexing === 'indexed'
-        ? { k: 'Indexing', t: 'Event indexed', n: 'Stored and queryable.', tone: 'success' }
-        : s.indexing === 'no_events'
-          ? { k: 'Indexing', t: 'No events emitted', n: 'The receipt contains no logs.', tone: 'idle' }
-          : s.indexing === 'pending'
-            ? { k: 'Indexing', t: 'Waiting for checkpoint', n: 'Indexed after an indexer covering this contract passes the block.', tone: 'info' }
-            : { k: 'Indexing', t: 'Not indexed', n: 'Configure an indexer for this contract to store its events.', tone: 'idle' };
-  return [sub, incl, exec, fin, idx];
-}
-
-export function StatusCells({ cells }: { cells: Cell[] }) {
+export function StatusCells({ cells }: { cells: StatusCell[] }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(180px,100%),1fr))', gap: 12 }}>
       {cells.map((c) => (
@@ -87,7 +43,7 @@ export function TxProgress({ transactionId }: { transactionId: string }) {
           {t.hash ? shortHash(t.hash, 18, 10) : 'No hash'}
         </h2>
       </div>
-      <StatusCells cells={statusCells(t.status, t.blockNumber, t.kind)} />
+      <StatusCells cells={statusCells(t.status, t.blockNumber, t.kind, t.indexerConfigured)} />
       {t.kind === 'deploy' && t.contract && (
         <div className="form-actions" style={{ marginTop: 0 }}>
           <Link className="button" href={href(`/app/contracts/${t.contract.id}`)}>
@@ -103,7 +59,7 @@ export function TxProgress({ transactionId }: { transactionId: string }) {
 export function execLabel(t: { submission_status: string; inclusion_status: string; execution_status: string; block_number: string | null }): [string, Tone] {
   if (t.execution_status === 'success') return ['Execution succeeded', 'success'];
   if (t.execution_status === 'reverted') return ['Execution reverted', 'danger'];
-  if (t.inclusion_status === 'reorged_out') return ['Receipt disappeared', 'warning'];
+  if (t.inclusion_status === 'reorged_out') return ['Reorganized out', 'warning'];
   if (t.submission_status === 'unknown') return ['Submission unconfirmed', 'warning'];
   if (t.submission_status === 'rejected') return ['Not submitted', 'idle'];
   if (t.submission_status === 'prepared') return ['Awaiting signature', 'idle'];

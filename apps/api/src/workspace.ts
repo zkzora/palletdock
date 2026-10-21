@@ -738,6 +738,13 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       revert = decodeRevert(abi, t.revert_data);
     }
     const fpRow = fp.rows[0] ?? null;
+    // Whether an active indexer source covers the contract this transaction targets (or created).
+    const target = t.kind === 'deploy' ? t.contract_address : t.to_address;
+    const indexerConfigured = target
+      ? (
+          await pool.query(`SELECT 1 FROM indexer_sources WHERE project_id=$1 AND desired_state <> 'deleted' AND lower(contract_address)=lower($2) LIMIT 1`, [g.project.id, target])
+        ).rowCount === 1
+      : false;
     // Denomination comes from the runtime metadata of this transaction's own fingerprint, and only while it is active.
     const unitPolicy = evmUnitPolicyFromFingerprint(fpRow);
     return {
@@ -771,6 +778,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         observations: obs.rows,
         logs: logs.rows,
         trackingStatus: t.tracking_status,
+        indexerConfigured,
         unitPolicy,
         unitNote: evmUnitNote(unitPolicy),
         feeTokens: evmTokenAmount(t.fee_raw, unitPolicy),

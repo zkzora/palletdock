@@ -136,7 +136,7 @@ export default function TransactionDetailPage() {
         </Notice>
       )}
       {checkMsg && <Notice tone="info">{checkMsg}</Notice>}
-      <StatusCells cells={statusCells(t.status, t.blockNumber, t.kind)} />
+      <StatusCells cells={statusCells(t.status, t.blockNumber, t.kind, t.indexerConfigured)} />
       {t.revert && (
         <Notice tone="danger" title={`Reverted with ${t.revert.name}`}>
           {JSON.stringify(t.revert.args)}
