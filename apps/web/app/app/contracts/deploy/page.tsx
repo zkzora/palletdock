@@ -11,6 +11,7 @@ import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
 import { TxProgress } from '@/components/tx-progress';
 import { NETWORK } from '@/lib/network';
+import { evmUnitLabel, useEvmUnitPolicy } from '@/lib/units';
 
 interface Sample {
   id: string;
@@ -38,6 +39,7 @@ type Choice = { kind: 'sample'; sample: Sample } | { kind: 'artifact'; artifact:
 
 export default function DeployPage() {
   const { project, projectId, readOnly, request, openSigner } = useWorkspace();
+  const units = useEvmUnitPolicy();
   const wallet = useWallet();
   const { data, error, loading, reload } = useResource<{ data: { samples: Sample[]; artifacts: Uploaded[] } }>(projectId ? `/workspace/projects/${projectId}/artifacts` : null);
   const [step, setStep] = useState(1);
@@ -213,7 +215,7 @@ export default function DeployPage() {
           {payable && (
             <div className="field">
               <label htmlFor="dep-value">
-                Value <span className="dim">raw EVM base units (denomination unverified)</span>
+                Value <span className="dim">{evmUnitLabel(units)}</span>
               </label>
               <input id="dep-value" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" />
             </div>

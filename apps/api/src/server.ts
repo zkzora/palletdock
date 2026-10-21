@@ -20,6 +20,7 @@ import {
   ERROR_CODES,
   apiKeyCreateSchema,
   projectCreateSchema,
+  evmUnitPolicyFromFingerprint,
   projectUpdateSchema,
   resolveNetwork,
   type ErrorCode,
@@ -177,7 +178,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     const config = resolveNetwork();
     const [probes, fingerprint, workers] = await Promise.all([
       pool.query(`SELECT DISTINCT ON (target) target,status,method,latency_ms,result,error,observed_at FROM rpc_probes WHERE network_id=$1 ORDER BY target,observed_at DESC`, [config.networkId]),
-      pool.query(`SELECT id,status,genesis_hash,evm_chain_id::text,evm_genesis_hash,spec_name,spec_version::text,ss58_format,token_symbol,token_decimals,last_verified_at FROM network_fingerprints WHERE network_id=$1 ORDER BY last_verified_at DESC LIMIT 1`, [config.networkId]),
+      pool.query(`SELECT id,status,genesis_hash,evm_chain_id::text,evm_genesis_hash,spec_name,spec_version::text,ss58_format,token_symbol,token_decimals,last_verified_at,evidence FROM network_fingerprints WHERE network_id=$1 ORDER BY last_verified_at DESC LIMIT 1`, [config.networkId]),
       pool.query(`SELECT worker_id,started_at,last_seen_at,info,now()-last_seen_at < interval '30 seconds' AS healthy FROM worker_heartbeats ORDER BY last_seen_at DESC LIMIT 10`),
     ]);
     return {
@@ -198,7 +199,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
           nativeAdapter: process.env.PALLETDOCK_NATIVE_ADAPTER === 'disabled' ? 'disabled' : 'enabled',
         },
         probes: probes.rows,
-        fingerprint: fingerprint.rows[0] ?? null,
+        fingerprint: fingerprint.rows[0] ? (({ evidence, ...rest }) => rest)(fingerprint.rows[0]) : null,
+        evmUnitPolicy: evmUnitPolicyFromFingerprint(fingerprint.rows[0] ?? null),
         workers: workers.rows,
       },
     };

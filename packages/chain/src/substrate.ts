@@ -16,6 +16,16 @@ export interface SubstrateIdentity {
   ss58Format: number | null;
   tokenSymbols: string[];
   tokenDecimals: number[];
+  /** Runtime constant `revive.nativeToEthRatio` (native base units → EVM wei), or null when metadata lacks it. */
+  nativeToEthRatio: string | null;
+}
+
+/** Read `revive.nativeToEthRatio` from runtime metadata constants, if the runtime exposes it. */
+export function nativeToEthRatioOf(consts: unknown): string | null {
+  const v = (consts as { revive?: { nativeToEthRatio?: { toString(): string } } } | undefined)?.revive?.nativeToEthRatio;
+  if (v == null) return null;
+  const s = v.toString();
+  return /^\d+$/.test(s) ? s : null;
 }
 
 export interface AccountMapping {
@@ -125,6 +135,7 @@ export class SubstrateAdapter {
       ss58Format,
       tokenSymbols,
       tokenDecimals,
+      nativeToEthRatio: nativeToEthRatioOf(this.api.consts),
     };
     if (identity.ss58Format !== null && identity.ss58Format !== this.network.ss58Format) {
       throw new Error(`Native network identity mismatch: expected SS58 ${this.network.ss58Format}, received ${identity.ss58Format}`);

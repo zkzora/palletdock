@@ -136,7 +136,7 @@ textarea.input { min-height: 96px; padding-block: 10px; resize: vertical; }
 .card-head { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
 .card-head h2 { margin: 0; font-size: 14px; }
 .card-head > span { color: var(--dim); font-size: 12px; }
-.activity-row { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 12px; align-items: baseline; padding: 12px 18px; border-top: 1px solid #1f2125; }
+.activity-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: baseline; padding: 12px 18px; border-top: 1px solid #1f2125; }
 .activity-row:first-of-type { border-top: 0; }
 .activity-row small { display: block; max-width: 320px; margin-top: 2px; overflow: hidden; color: #9a9fa8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .activity-row time { color: var(--dim); font: 400 12px var(--font-code); }

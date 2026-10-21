@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { safeEqualStr, sha256Hex } from '@palletdock/db';
-import { API_KEY_PREFIX, ERROR_CODES, type ErrorCode, type ReadScope } from '@palletdock/shared';
+import { API_KEY_PREFIX, ERROR_CODES, evmUnitPolicyFromFingerprint, type ErrorCode, type EvmUnitPolicy, type ReadScope } from '@palletdock/shared';
 
 export const SESSION_COOKIE = 'palletdock_session';
 
@@ -145,6 +145,15 @@ export async function workspaceGuard(
     return null;
   }
   return { auth, project };
+}
+
+/** Columns of network_fingerprints that evmUnitPolicyFromFingerprint reads. */
+export const UNIT_SOURCE_COLUMNS = 'id, status, token_symbol, token_decimals, spec_version::text, last_verified_at, evidence';
+
+/** EVM unit policy of the active fingerprint; unverified unless its runtime metadata supports it. */
+export async function activeUnitPolicy(pool: pg.Pool): Promise<EvmUnitPolicy> {
+  const r = await pool.query(`SELECT ${UNIT_SOURCE_COLUMNS} FROM network_fingerprints WHERE network_id='portaldot-v3-testnet' AND status='active' LIMIT 1`);
+  return evmUnitPolicyFromFingerprint(r.rows[0] ?? null);
 }
 
 export async function activeFingerprint(pool: pg.Pool): Promise<{ id: string; genesis_hash: string; evm_chain_id: string } | null> {

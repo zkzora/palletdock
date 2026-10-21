@@ -31,7 +31,7 @@ Three separate questions per area:
 | Identity fingerprint, mismatch halt | ✓ | ✓ (pruned-node and codec-wrapper cases tested) | ✓ fingerprint active 2026-10-17 |
 | Bounded RPC backoff (probes, receipts, indexer) | ✓ | ✓ `Backoff` + overlap test; worker log spacing measured | n/a |
 | Network reset migration (manual, `--confirm`) | ✓ | ✓ `network-reset.test.ts` | not run (needs your approval) |
-| Lossless quantities, EVM unit policy (raw) | ✓ | ✓ | ✓ denomination verified 2026-10-19 (×10⁴, minus existential deposit) |
+| Lossless quantities, EVM unit policy from runtime metadata (`revive.nativeToEthRatio` on the verified fingerprint) | ✓ | ✓ `quantity.test.ts`, `api.test.ts` (verified, missing metadata, inactive fingerprint) | ✓ ratio 10000 read live 2026-10-21 → 18 decimals; matches the 2026-10-19 balance check |
 | Artifact/ABI validation, argument coercion | ✓ | ✓ `abi.test.ts` | – |
 | Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ✓ PalletDockStorage deployed 2026-10-21; runtime code identical to the compiled artifact |
 | Owner auth, sessions, CSRF, login limits | ✓ | ✓ `api.test.ts` | n/a |

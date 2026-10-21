@@ -180,6 +180,48 @@ describe('contracts', () => {
     expect(rejected.map((t: { id: string }) => t.id)).toContain(t1);
   });
 
+  it('reports a verified EVM denomination only from the active fingerprint’s runtime metadata', async () => {
+    const txId = (await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/contracts/${contractId}/prepare-write`, { function: 'store', args: ['42'], from: FROM })).json().data.transactionId;
+    await db.pool.query(`UPDATE transactions SET fee_raw=3856912452799144200 WHERE id=$1`, [txId]);
+    const detail = async () => (await ws(sessionA, 'GET', `/workspace/projects/${A.projectId}/transactions/${txId}`)).json().data;
+    const original = (await db.pool.query(`SELECT token_symbol, token_decimals, spec_version, evidence FROM network_fingerprints WHERE id=$1`, [A.fingerprintId])).rows[0];
+
+    // Seeded fingerprint has no native decimals or revive metadata: unverified, no token amounts.
+    let d = await detail();
+    expect(d.unitPolicy.status).toBe('unverified');
+    expect(d.unitNote).toMatch(/^Fee, value and gas price are raw EVM base units\. Denomination unverified/);
+    expect(d.feeTokens).toBeNull();
+    expect(d.network).not.toHaveProperty('evidence');
+
+    try {
+      await db.pool.query(
+        `UPDATE network_fingerprints SET token_symbol='tPOT', token_decimals=14, spec_version=3002, evidence='{"substrate":{"nativeToEthRatio":"10000"}}' WHERE id=$1`,
+        [A.fingerprintId],
+      );
+      d = await detail();
+      expect(d.unitPolicy).toMatchObject({ status: 'verified', decimals: 18, symbol: 'tPOT' });
+      expect(d.unitNote).toContain('revive.nativeToEthRatio 10000');
+      expect(d.feeTokens).toBe('3.8569124527991442 tPOT');
+      const network = (await ws(sessionA, 'GET', '/workspace/network')).json().data;
+      expect(network.evmUnitPolicy).toMatchObject({ status: 'verified', decimals: 18 });
+      expect(network.fingerprint).not.toHaveProperty('evidence');
+
+      // A fingerprint that is no longer active (e.g. after a network reset) is not trusted.
+      await db.pool.query(`UPDATE network_fingerprints SET status='mismatch' WHERE id=$1`, [A.fingerprintId]);
+      d = await detail();
+      expect(d.unitPolicy.status).toBe('unverified');
+      expect(d.feeTokens).toBeNull();
+    } finally {
+      await db.pool.query(`UPDATE network_fingerprints SET status='active', token_symbol=$2, token_decimals=$3, spec_version=$4, evidence=$5 WHERE id=$1`, [
+        A.fingerprintId,
+        original.token_symbol,
+        original.token_decimals,
+        original.spec_version,
+        original.evidence,
+      ]);
+    }
+  });
+
   it('refuses an indexer start block the RPC node has already pruned', async () => {
     const pruned = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources`, { contractId, events: ['NumberChanged'], startBlock: '12' });
     expect(pruned.statusCode).toBe(400);

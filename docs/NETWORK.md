@@ -36,7 +36,7 @@ This supersedes the old fingerprint, activates the observed one, pauses old sour
 ## Units
 
 - Native balances: 14 decimals (runtime properties).
-- EVM facade (balances, `value`, gas price, fees): **denomination not verified**. Shown as raw base units with an explicit note. The native 14-decimal scale is never applied automatically. `describeEvmAmount` has a `verified` policy branch for when evidence exists.
+- EVM facade (balances, `value`, gas price, fees): raw base units are always shown. The denomination is reported as **verified** only when it is derived from runtime metadata recorded on the active, verified network fingerprint: native `tokenDecimals` plus `revive.nativeToEthRatio` (a power of ten), read by the worker during identity verification (`evmUnitPolicyFromFingerprint`). On Portaldot V3 (spec 3002) that is 14 + log10(10000) = 18 decimals, matching the 2026-10-19 balance check (TESTNET_EVIDENCE.md). Without that metadata, or once the fingerprint is no longer active, amounts stay raw and are labelled unverified with the reason; the native 14-decimal scale is never applied to EVM values.
 - Gas is not Weight. Fee = `gasUsed × effectiveGasPrice` (raw) only when the receipt provides both.
 - Storage deposit: from a `reviveApi.call` / `reviveApi.instantiate` dry run through current metadata when its parameter names are recognised; otherwise "unavailable" with the reason. Charge and refund are distinguished. A non-zero `value` makes the dry run unavailable, because value units are unverified.
 

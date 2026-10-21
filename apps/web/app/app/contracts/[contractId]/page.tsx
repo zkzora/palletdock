@@ -11,6 +11,7 @@ import { CopyButton, Modal, Notice, Pre, Tabs, useToast } from '@/components/ui'
 import { ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
+import { evmUnitExplanation, evmUnitLabel, useEvmUnitPolicy } from '@/lib/units';
 import { groupDigits, pretty, shortHash, when } from '@/lib/format';
 
 interface Fn {
@@ -225,6 +226,7 @@ function ReadTab({ c }: { c: Contract }) {
 
 function WriteTab({ c }: { c: Contract }) {
   const { projectId, readOnly, request, openSigner, href } = useWorkspace();
+  const units = useEvmUnitPolicy();
   const wallet = useWallet();
   const [sig, setSig] = useState(c.writeFunctions[0]?.signature ?? '');
   const [args, setArgs] = useState<string[]>([]);
@@ -273,7 +275,7 @@ function WriteTab({ c }: { c: Contract }) {
         {fn?.payable && (
           <div className="field">
             <label htmlFor="write-value">
-              Value <span className="dim">raw EVM base units (denomination unverified)</span>
+              Value <span className="dim">{evmUnitLabel(units)}</span>
             </label>
             <input id="write-value" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} />
           </div>
@@ -317,6 +319,7 @@ function WriteTab({ c }: { c: Contract }) {
 
 function SignerPanel() {
   const wallet = useWallet();
+  const units = useEvmUnitPolicy();
   const { openSigner } = useWorkspace();
   const [bal, setBal] = useState<string | null>(null);
   useEffect(() => {
@@ -347,7 +350,7 @@ function SignerPanel() {
           </div>
           <div>
             <dt>Unit note</dt>
-            <dd className="dim">The EVM facade denomination is not verified; native tPOT decimals (14) are not applied to EVM values.</dd>
+            <dd className="dim">{evmUnitExplanation(units)}</dd>
           </div>
         </dl>
       ) : (

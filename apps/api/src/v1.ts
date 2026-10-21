@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
-import { API_DEFAULT_LIMIT, API_MAX_LIMIT, type ReadScope } from '@palletdock/shared';
+import { API_DEFAULT_LIMIT, API_MAX_LIMIT, evmUnitNote, type ReadScope } from '@palletdock/shared';
 import { decodeCursor, encodeCursor, normalizedFilterHash } from './cursor.js';
-import { cursorSecret, fail, isUuid, keyAuth, param } from './context.js';
+import { activeUnitPolicy, cursorSecret, fail, isUuid, keyAuth, param } from './context.js';
 
 /**
  * Public, project-scoped, read-only API. Authenticated by project read keys
@@ -351,6 +351,7 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
       )
     ).rows;
     const page = rows.slice(0, limit);
+    const unitNote = evmUnitNote(await activeUnitPolicy(pool));
     const last = page.at(-1);
     const next = rows.length > limit && last ? encodeCursor({ resource: 'transactions', projectId, filterHash, snapshot, after: [new Date(last.created_at).toISOString(), last.id] }, secret) : null;
     return respond(
@@ -374,7 +375,7 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
         gasUsed: t.gas_used,
         effectiveGasPriceRaw: t.effective_gas_price,
         feeRaw: t.fee_raw,
-        unitNote: 'Raw EVM base units. Display denomination is unverified for the Portaldot EVM facade.',
+        unitNote,
         createdAt: t.created_at,
         updatedAt: t.updated_at,
       })),

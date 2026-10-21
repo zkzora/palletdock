@@ -564,7 +564,7 @@ export const DOCS: Doc[] = [
         'The RPC node keeps block state for only ~258 blocks (~26 minutes); the indexer needs a recent start block and a running worker.',
         'Finality is always unknown. No verified finality adapter exists.',
         'Storage-deposit estimates use the runtime dry run only when metadata exposes a compatible `reviveApi` call; otherwise they are unavailable with a reason. Deposits are not read from receipts.',
-        'The EVM view reports balances as (native free − existential deposit) × 10⁴ (verified 2026-10-19). PalletDock still displays raw base units.',
+        'EVM denomination comes from runtime metadata on the verified fingerprint (`revive.nativeToEthRatio` 10000 → 18 decimals); PalletDock shows raw base units plus the exact tPOT amount only while that holds, and labels amounts unverified otherwise.',
         'Only EVM contract logs are indexed. Native events, native signing, Assets/Uniques/Nfts management, ink!, bridges, tracing, source verification, team roles, and billing are not implemented.',
         'Linked libraries are not supported in uploaded artifacts.',
         'One owner per deployment; not independently audited.',

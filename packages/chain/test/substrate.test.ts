@@ -24,3 +24,17 @@ describe('parseChainProperties', () => {
     expect(parseChainProperties(null)).toEqual({ ss58Format: null, tokenSymbols: [], tokenDecimals: [] });
   });
 });
+
+describe('nativeToEthRatioOf', () => {
+  it('reads revive.nativeToEthRatio from runtime constants (Portaldot V3: 10000)', async () => {
+    const { nativeToEthRatioOf } = await import('../src/substrate.js');
+    expect(nativeToEthRatioOf({ revive: { nativeToEthRatio: { toString: () => '10000' } } })).toBe('10000');
+  });
+  it('returns null when the runtime does not expose it or the value is not an integer', async () => {
+    const { nativeToEthRatioOf } = await import('../src/substrate.js');
+    expect(nativeToEthRatioOf({})).toBeNull();
+    expect(nativeToEthRatioOf(undefined)).toBeNull();
+    expect(nativeToEthRatioOf({ revive: {} })).toBeNull();
+    expect(nativeToEthRatioOf({ revive: { nativeToEthRatio: { toString: () => '0x2710' } } })).toBeNull();
+  });
+});

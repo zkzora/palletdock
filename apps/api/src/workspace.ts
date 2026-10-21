@@ -32,6 +32,9 @@ import {
   contractImportSchema,
   eventTopic0,
   eventsOf,
+  evmTokenAmount,
+  evmUnitNote,
+  evmUnitPolicyFromFingerprint,
   functionsOf,
   indexerSourceSchema,
   resolveNetwork,
@@ -42,7 +45,7 @@ import {
   type PortaldotNetworkConfig,
 } from '@palletdock/shared';
 import { sampleArtifacts } from '@palletdock/contracts';
-import { activeFingerprint, fail, isUuid, param, workspaceGuard } from './context.js';
+import { activeFingerprint, activeUnitPolicy, fail, isUuid, param, UNIT_SOURCE_COLUMNS, workspaceGuard } from './context.js';
 
 export interface WorkspaceDeps {
   network?: PortaldotNetworkConfig;
@@ -148,12 +151,14 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       } catch {
         gasPrice = null;
       }
+      const unitPolicy = await activeUnitPolicy(pool);
       return {
         status: 'estimated' as const,
         gasLimitEstimate: gas,
         gasPriceRaw: gasPrice,
         maxFeeRaw: gasPrice ? (BigInt(gas) * BigInt(gasPrice)).toString() : null,
-        unit: 'raw EVM base units (denomination unverified)',
+        unit: unitPolicy.status === 'verified' ? `EVM base units (${unitPolicy.decimals} decimals, ${unitPolicy.symbol}; verified from runtime metadata)` : 'raw EVM base units (denomination unverified)',
+        maxFeeTokens: gasPrice ? evmTokenAmount((BigInt(gas) * BigInt(gasPrice)).toString(), unitPolicy) : null,
         note: 'EVM gas is not native Weight. The wallet may adjust gas and price before you approve.',
       };
     } catch (e) {
@@ -725,20 +730,23 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
           )
         : Promise.resolve({ rows: [] }),
       t.contract_id ? pool.query(`SELECT id,name,address FROM contracts WHERE id=$1`, [t.contract_id]) : Promise.resolve({ rows: [] }),
-      pool.query(`SELECT genesis_hash,evm_chain_id::text,status FROM network_fingerprints WHERE id=$1`, [t.fingerprint_id]),
+      pool.query(`SELECT genesis_hash,evm_chain_id::text,${UNIT_SOURCE_COLUMNS} FROM network_fingerprints WHERE id=$1`, [t.fingerprint_id]),
     ]);
     let revert = t.revert_decoded;
     if (!revert && t.revert_data && t.abi_version_id) {
       const abi = (await pool.query(`SELECT abi FROM abi_versions WHERE id=$1`, [t.abi_version_id])).rows[0]?.abi;
       revert = decodeRevert(abi, t.revert_data);
     }
+    const fpRow = fp.rows[0] ?? null;
+    // Denomination comes from the runtime metadata of this transaction's own fingerprint, and only while it is active.
+    const unitPolicy = evmUnitPolicyFromFingerprint(fpRow);
     return {
       data: {
         id: t.id,
         kind: t.kind,
         origin: t.origin,
         hash: t.hash,
-        network: { networkId: 'portaldot-v3-testnet', ...fp.rows[0] },
+        network: { networkId: 'portaldot-v3-testnet', genesis_hash: fpRow?.genesis_hash ?? null, evm_chain_id: fpRow?.evm_chain_id ?? null, status: fpRow?.status ?? null },
         from: t.from_address,
         to: t.to_address,
         contract: contract.rows[0] ?? null,
@@ -762,7 +770,10 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         error: t.error_message,
         observations: obs.rows,
         logs: logs.rows,
-        unitNote: 'Fee, value and gas price are raw EVM base units. The EVM facade denomination is unverified, so no decimal conversion is shown.',
+        unitPolicy,
+        unitNote: evmUnitNote(unitPolicy),
+        feeTokens: evmTokenAmount(t.fee_raw, unitPolicy),
+        valueTokens: evmTokenAmount(t.value_raw, unitPolicy),
         createdAt: t.created_at,
         updatedAt: t.updated_at,
       },
