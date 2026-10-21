@@ -20,13 +20,6 @@ const implemented = [
   'Network identity fingerprint pinned from genesis hash and EVM chain ID',
   'Monitoring: timestamped RPC probes, worker heartbeat, indexer lag, and API error counts',
 ];
-const planned = [
-  'Native (SS58) signing and native event indexing',
-  'Native Assets / Uniques / Nfts management',
-  'A verified finality adapter (finality is shown as unknown today)',
-  'Source verification, execution tracing, team roles, billing',
-];
-
 export default function LandingPage() {
   const header = useScrolledHeader<HTMLElement>();
   const hero = useHeroParallax<HTMLElement>();
@@ -103,10 +96,10 @@ export default function LandingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="eyebrow">Scope</div>
               <h2 id="scope-title" className="section-title">
-                What is built, and what is not.
+                What is built.
               </h2>
             </div>
-            <div className="ld-ledger">
+            <div className="ld-ledger single">
               <div className="is-built">
                 <h3>Implemented</h3>
                 <ul>
@@ -115,15 +108,10 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <div className="is-planned">
-                <h3>Planned, not built</h3>
-                <ul>
-                  {planned.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
             </div>
+            <p className="muted ld-scope-note">
+              Work that is not built yet, and the current limits, are kept in the <Link href="/roadmap">Roadmap</Link> and <Link href="/docs/limitations">Limitations</Link>.
+            </p>
           </div>
         </section>
 

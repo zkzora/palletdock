@@ -231,7 +231,11 @@
 .ld-ledger li { display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--border); color: #c4c8ce; font-size: 14px; line-height: 1.5; }
 .ld-ledger li::before { flex: none; width: 16px; font-family: var(--font-code); }
 .ld-ledger .is-built li::before { content: "✓"; color: var(--success); }
-.ld-ledger .is-planned li::before { content: "–"; color: var(--dim); }
+.ld-ledger.single { grid-template-columns: 1fr; }
+.ld-ledger.single ul { columns: 2; column-gap: 48px; }
+.ld-ledger.single li { break-inside: avoid; }
+.ld-scope-note { margin: 0; font-size: 14px; line-height: 1.6; }
+.ld-scope-note a { color: var(--foreground); }
 
 /* ---------------------------------------------------------------- closing CTA */
 .ld-cta { position: relative; overflow: hidden; border-top: 1px solid var(--border); }
@@ -280,6 +284,7 @@
   .ld-fig:first-child { border-top: 0; }
   .ld-fig-art { width: min(100%, 420px); }
   .ld-ledger { grid-template-columns: 1fr; }
+  .ld-ledger.single ul { columns: 1; }
   .ld-ledger > div + div { padding: 28px 0 0; border-left: 0; }
   .ld-studio-body { grid-template-columns: 1fr; }
   .ld-fn-list { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); }
