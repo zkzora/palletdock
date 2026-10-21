@@ -14,7 +14,8 @@ No private keys, seeds, passwords, API secrets, or session tokens appear in this
 | Stored event identity matches receipt (block hash / tx hash / log index) | **Live-verified (2026-10-21)** | Indexed record and receipt agree on block hash `0xbb34…acde`, tx hash, and log index 3; one canonical `raw_logs` row. |
 | Authenticated API response returns that record with coverage/freshness | **Live-verified (2026-10-21)** | `GET /v1/projects/{id}/events` → 200, `req_928DQZqiuWqf`, checkpoint 133023, coverage `following`, lag 0, `finality: "unknown"`. |
 | RPC interruption: safe failure, clear error, recovery without duplicates | **Live-verified (2026-10-21)** | Source went *Needs attention* with the error and backoff, then recovered from its checkpoint; 0 duplicates. See "Live RPC interruption" below. |
-| Worker restart with a new event while stopped | Not yet run live · Tested deterministically | `indexer.test.ts` (backoff/resume, restart, duplicate re-ingestion, concurrent workers) |
+| Worker restart with a new event while stopped | **Live-verified (2026-10-21)** | `store(43)` `0x15f4a518…ffc1` included at block 134261 while the worker was down; after restart exactly one new canonical record (1 → 2), 0 duplicates, matching the receipt. See "Live worker restart" below. |
+| Reorg rollback | **Live-observed (2026-10-21)** | 20 tip reorganizations, at most 3 blocks deep, rolled back with 0 orphaned records; a probe confirmed a hash change above `finalized`. |
 | Consumer example reading the real API | Implemented | `examples/read-events.mjs` (not run against live data) |
 
 Do not treat any fixture result as Portaldot evidence. Fixture runs use a local Hardhat chain that reuses chain ID 420420777 and are labelled FIXTURE NETWORK in the UI.
@@ -130,8 +131,12 @@ The Packet's `network.json` records an earlier successful read-only check (2026-
 
 About 26 minutes after inclusion the node pruned both live transactions, and the old receipt tracker reported them as *Receipt disappeared (possible reorganization)* and cleared their block number, block hash, and receipt; it then polled them every ~4 s. Nothing had been reorganized: the contract still returned 42. The tracker now distinguishes pruned history from a real reorg (a different canonical hash at the recorded height), keeps the last snapshot as `history_pruned`, never deletes data on RPC errors, backs off with a hard stop, and ends tracking in a terminal state. Both transactions were restored from their observation log with recorded provenance and are `included` / `success` at blocks 133019 and 133023 again. Details, provenance export, and screenshots: [evidence/2026-10-21-tracker-fix](evidence/2026-10-21-tracker-fix/).
 
-## Not yet run live
+## Live worker restart (2026-10-21)
 
-Covered by deterministic tests (`apps/worker/test/indexer.test.ts`) and still open on the live network:
+The worker was stopped, `store(43)` (`0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1`) was sent and included at block 134261 (`0x701ec6b7…a869b`) while it was down (checkpoint held at 134259), and the worker was started again after 60 s. It resumed from its checkpoint: checkpoint 134303, canonical records 1 → 2, 0 duplicate identities, the new record at log index 3 with `previousValue=42, newValue=43` and the receipt's block hash; the tracker recorded the transaction `included` / `success` and `settled`. `retrieve()` returns 43.
 
-- Worker restart with a new event emitted while the worker is stopped (`store(43)`), confirming exactly one new canonical record after resume.
+## Live tip reorganizations (2026-10-21)
+
+Following the latest block, the indexer detected and rolled back 20 reorganizations between 15:07 and 16:51 UTC, each at most 3 blocks deep, with 0 orphaned records. A 3-minute read-only probe saw the hash at height 134366 replaced while `finalized` was 134364, and no change at or below `finalized`: these are real short forks at the tip.
+
+Artifacts: [evidence/2026-10-21-restart](evidence/2026-10-21-restart/).

@@ -12,3 +12,4 @@ playwright-report/
 *.tsbuildinfo
 evidence/private/
 playwright-report-fixture/
+.superstack/

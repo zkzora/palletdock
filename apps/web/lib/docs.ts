@@ -383,7 +383,7 @@ export const DOCS: Doc[] = [
     slug: 'indexer',
     group: 'Data and APIs',
     title: 'Indexing And Finality',
-    meta: [['Status', 'Implemented for EVM contract logs and tested (including reorg and recovery) on a fixture chain; a live NumberChanged event was indexed on 2026-10-21. RPC-interruption recovery was verified live the same day; a live worker-restart check is not yet run.']],
+    meta: [['Status', 'Implemented for EVM contract logs and tested (including reorg and recovery) on a fixture chain; a live NumberChanged event was indexed on 2026-10-21. RPC-interruption recovery, a worker restart with a new event while stopped, and 20 real tip reorganizations (≤ 3 blocks) were handled live the same day without duplicates or orphaned records.']],
     blocks: [
       ['h', 'What the indexer does'],
       ['p', 'An indexer reads a bounded source, stores identifiable records, and reports which range was successfully covered. It cannot turn absent data into evidence that an event never happened outside its coverage.'],
@@ -561,7 +561,7 @@ export const DOCS: Doc[] = [
     title: 'Limitations',
     blocks: [
       ['bullets', [
-        'The deploy → write → index → API flow ran live on Portaldot V3 Testnet on 2026-10-21 (contract `0xdd982913cb04f9e438437e2137ba1452e4b211ed`). RPC-interruption recovery was verified live the same day; worker restart with a new event is tested deterministically but not yet on the live network.',
+        'The deploy → write → index → API flow ran live on Portaldot V3 Testnet on 2026-10-21 (contract `0xdd982913cb04f9e438437e2137ba1452e4b211ed`). RPC-interruption recovery and a worker restart with a new event while stopped were verified live the same day.',
         'The RPC node keeps block state for only ~258 blocks (~26 minutes); the indexer needs a recent start block and a running worker.',
         'Finality is always unknown. No verified finality adapter exists.',
         'Storage-deposit estimates use the runtime dry run only when metadata exposes a compatible `reviveApi` call; otherwise they are unavailable with a reason. Deposits are not read from receipts.',

@@ -1,0 +1,99 @@
+{
+  "stage": "restart",
+  "project": "storage-demo-live",
+  "startedAt": "2026-10-21T16:53:15.844Z",
+  "steps": [
+    {
+      "at": "2026-10-21T16:53:16.665Z",
+      "name": "before",
+      "status": "following",
+      "checkpoint": "134258",
+      "block_hash": "0x9d9355897db781bed5cb68408c435ff80d7fcff560973cec568748aaf3070518",
+      "canonicalRecords": 1,
+      "duplicateIdentities": 0
+    },
+    {
+      "at": "2026-10-21T16:53:18.822Z",
+      "name": "stopping worker",
+      "output": "stopped worker (pid 24548)"
+    },
+    {
+      "at": "2026-10-21T16:53:23.090Z",
+      "name": "signed and broadcast store(43)",
+      "hash": "0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1"
+    },
+    {
+      "at": "2026-10-21T16:53:26.812Z",
+      "name": "included while worker down (from RPC)",
+      "block": "134261",
+      "blockHash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+      "status": "0x1",
+      "logs": 1
+    },
+    {
+      "at": "2026-10-21T16:54:26.838Z",
+      "name": "worker down for ~60 s",
+      "downMs": 60023,
+      "status": "following",
+      "checkpoint": "134259",
+      "block_hash": "0x8d96b0dc5f1d37abe89703e70d653112b78a1e6179f3b0b039f9ec8f0bba430e",
+      "canonicalRecords": 1,
+      "duplicateIdentities": 0
+    },
+    {
+      "at": "2026-10-21T16:57:52.043Z",
+      "name": "starting worker",
+      "output": "started worker (pid 30180)"
+    },
+    {
+      "at": "2026-10-21T16:57:52.077Z",
+      "name": "verified",
+      "exactlyOneNewCanonicalRecord": true,
+      "noDuplicateIdentities": true,
+      "recordMatchesReceipt": true,
+      "decodedNewValue43": true,
+      "checkpointPassedWriteBlock": true,
+      "trackerRecordedInclusion": true
+    }
+  ],
+  "hash": "0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1",
+  "receiptBlock": "134261",
+  "receiptBlockHash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+  "after": {
+    "status": "following",
+    "checkpoint": "134303",
+    "block_hash": "0x17ca193aa9a0e345b7f9d89bc88f84a9f8859d7128afd86bd313d3a897910cc4",
+    "canonicalRecords": 2,
+    "duplicateIdentities": 0
+  },
+  "newRecords": [
+    {
+      "block_number": "134261",
+      "block_hash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+      "log_index": 3,
+      "canonical": true,
+      "event_name": "NumberChanged",
+      "args": {
+        "caller": "0xfA02532D22cB7e9EF572751BE928efCD2Ac4fA8F",
+        "newValue": "43",
+        "previousValue": "42"
+      }
+    }
+  ],
+  "transaction": {
+    "inclusion_status": "included",
+    "execution_status": "success",
+    "block_number": "134261",
+    "block_hash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+    "tracking_status": "settled"
+  },
+  "checks": {
+    "exactlyOneNewCanonicalRecord": true,
+    "noDuplicateIdentities": true,
+    "recordMatchesReceipt": true,
+    "decodedNewValue43": true,
+    "checkpointPassedWriteBlock": true,
+    "trackerRecordedInclusion": true
+  },
+  "finishedAt": "2026-10-21T16:57:54.135Z"
+}

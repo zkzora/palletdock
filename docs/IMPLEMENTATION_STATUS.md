@@ -6,7 +6,7 @@ Three separate questions per area:
 
 - **Implemented**: the code exists in `main`.
 - **Locally tested**: an automated check passed: unit/integration tests (real PostgreSQL), browser E2E on the *fixture chain* (local Hardhat EVM, chain ID 420420777, labelled FIXTURE NETWORK), CI, or Docker. Not evidence about Portaldot.
-- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. As of 2026-10-21: network identity, account mapping, funding and the EVM unit policy, and the deploy → write → index → API chain are live-verified (signed by the owner with a scripted EIP-1193 signer through the PalletDock UI; see TESTNET_EVIDENCE.md). RPC-interruption recovery is live-verified (safe failure, clear error, recovery from checkpoint, no duplicates); worker restart with a new event is not yet run live.
+- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. As of 2026-10-21: network identity, account mapping, funding and the EVM unit policy, and the deploy → write → index → API chain are live-verified (signed by the owner with a scripted EIP-1193 signer through the PalletDock UI; see TESTNET_EVIDENCE.md). RPC-interruption recovery and a worker restart with a new event while stopped are live-verified (no duplicates in either), and 20 real tip reorganizations (≤ 3 blocks) were rolled back without orphaned records.
 
 ## Verification runs
 
@@ -45,18 +45,17 @@ Three separate questions per area:
 | Wallet: wrong network, sender change, rejection, insufficient funds, unknown/timeout, late hash | ✓ | ✓ `wallet-core.test.ts`, fixture E2E rejection | ✗ |
 | Submission state machine | ✓ | ✓ | ◐ success path (wallet hash → included → executed) |
 | Receipt tracker: inclusion, revert, reorg only on a different canonical hash (re-inclusion), pruned history kept as `history_pruned`, bounded backoff and terminal tracking states, sender/recipient match, deploy → contract | ✓ | ✓ `tx-tracker.test.ts` (dedicated; pruning, real reorg, transient RPC failures, settling, restore) | ◐ inclusion, execution, deploy → contract, and pruned history observed (2026-10-21; the old tracker misread pruning as a reorg, fixed and restored with provenance: evidence/2026-10-21-tracker-fix); revert and reorg not observed |
-| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ◐ backfill from the deployment block, atomic commit, following with lag 0, RPC failure → backoff → recovery without duplicates; restart and concurrency not run live |
-| Indexer: reorg rollback/replacement, deep reorg or pruned history → recovery_required | ✓ | ✓ | ✗ |
+| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ◐ backfill from the deployment block, atomic commit, following with lag 0, RPC failure → backoff → recovery without duplicates, restart with a new event while stopped (1 → 2 records, 0 duplicates); concurrent workers not run live |
+| Indexer: reorg rollback/replacement, deep reorg or pruned history → recovery_required | ✓ | ✓ | ◐ 20 tip reorgs (≤ 3 blocks) rolled back with 0 orphaned records; deep reorg and recovery_required not observed |
 | Read API v1, keys, redaction, snapshot cursors | ✓ | ✓ `api.test.ts`, `cursor.test.ts` | ◐ events endpoint 200 with a scoped key (`req_928DQZqiuWqf`); cursors not exercised live |
 | OpenAPI conformance | ✓ | ✓ `openapi.test.ts` | n/a |
 | Monitoring and request logging | ✓ | ✓ | ✓ live probes responding |
 | Web UI (design port), mobile layout | ✓ | ✓ fixture E2E desktop + mobile | ✓ desktop flow used for the live run |
 | Docker image + compose | ✓ | ✓ CI docker job | n/a |
 | CI | ✓ | ✓ two green runs | n/a |
-| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture | ✓ deploy → write → index → API and RPC-interruption recovery (2026-10-21); worker restart not yet run live |
+| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture | ✓ deploy → write → index → API, RPC-interruption recovery, and worker restart (2026-10-21) |
 
 ## Open items
 
-- Live worker-restart check with a new event while stopped (WALKTHROUGH.md step 6.1).
 - A MetaMask-approved run of the same flow (the 2026-10-21 run used a scripted EIP-1193 signer).
 - Replacement-transaction linking by nonce.

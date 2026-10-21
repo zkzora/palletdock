@@ -1,0 +1,22 @@
+{
+  "ranAt": "2026-10-21T17:01Z–17:04Z",
+  "samples": 48,
+  "errors": 0,
+  "heightsObserved": 32,
+  "from": 134362,
+  "to": 134393,
+  "finalizedMax": 134391,
+  "replacements": [
+    {
+      "height": 134366,
+      "previous": [
+        "0x22530968aa2fc7f7e30114b21c40496fd6dad14ccdc5678b78bbf57cfeb74a09"
+      ],
+      "now": "0x7b00ebee870e43ea202ce5ffb9ce4d57a3e62f7c84ba2d77f3a07a310c878bae",
+      "finalizedAtTime": 134364,
+      "aboveFinalized": true,
+      "at": "2026-10-21T17:04:12.483Z"
+    }
+  ],
+  "replacedAtOrBelowFinalized": 0
+}
