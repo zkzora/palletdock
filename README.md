@@ -2,7 +2,7 @@
 
 PalletDock is a self-hosted developer workspace for **Portaldot V3 Testnet** (EVM layer). One project keeps a contract's artifacts, wallet-signed deployments and writes, tracked receipts, indexed events, a scoped read API, and monitoring together, and always shows the network, block, and freshness context behind each value.
 
-> Status: testnet MVP. The full workflow is implemented and passes automated tests, including browser E2E against a local fixture chain. **Live acceptance on Portaldot V3 Testnet is blocked**: both public Portaldot RPC endpoints returned HTTP 502 throughout development (see [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md)). Not audited, not production-ready, no mainnet support. Portaldot is not Polkadot; PalletDock is independent tooling.
+> Status: self-hosted testnet MVP. **Live on Portaldot V3 Testnet (2026-10-21):** PalletDockStorage deployed at [`0xdd982913cb04f9e438437e2137ba1452e4b211ed`](docs/TESTNET_EVIDENCE.md#live-acceptance-run-2026-10-21) (tx `0x25f03a78…f30f`, block 133019), `store(42)` executed (tx `0x14ee38e9…fa47`, block 133023), its `NumberChanged` event indexed with block hash, tx hash, and log index matching the receipt, and served by the read API (`req_928DQZqiuWqf`, finality reported as unknown); a simulated RPC interruption failed safely and recovered without duplicates. Screenshots and raw results: [docs/evidence/2026-10-21-live](docs/evidence/2026-10-21-live/). Network identity, account mapping, funding, and the EVM unit policy are recorded in the same file. Not audited, not production-ready. PalletDock is independent tooling, not an official Portaldot product.
 
 ## What it does
 
@@ -55,7 +55,7 @@ Windows helper for long-running services (PIDs in `.data/*.pid`, logs in `.data/
 powershell -File scripts/dev-services.ps1 start|stop|restart|status
 ```
 
-Docker (unverified here; Docker was not available on the development machine): `docker compose --profile app up -d`, then `docker compose run --rm owner --email you@example.com`.
+Docker: `docker compose --profile app up -d`, then `docker compose run --rm owner --email you@example.com`. The image build and a compose boot (migrate, API health, web `/login`, worker) are checked in CI ([IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)).
 
 ## Tests
 

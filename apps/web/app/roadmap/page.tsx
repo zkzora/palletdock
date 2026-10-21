@@ -5,7 +5,7 @@ import { Para, PublicPage, Section } from '@/components/public-page';
 const MILESTONES: Array<{ title: string; status: string; tone: string; items: string[]; exit: string }> = [
   {
     title: 'Milestone 1: A proven end-to-end workflow',
-    status: 'Implemented · live acceptance pending',
+    status: 'Implemented · ran live 2026-10-21',
     tone: '#6cb2f5',
     items: [
       'Project creation and Portaldot V3 network configuration.',
@@ -16,7 +16,7 @@ const MILESTONES: Array<{ title: string; status: string; tone: string; items: st
       'A project-scoped read-only API.',
       'Monitoring for RPC health, transaction outcomes, and indexing progress.',
     ],
-    exit: 'A real on-chain demo links a deployment, an interaction, an indexed event, and an API response, each with its network, address, hash, and freshness. Verified on a local fixture chain; the live Portaldot V3 run is in progress.',
+    exit: 'A real on-chain demo links a deployment, an interaction, an indexed event, and an API response, each with its network, address, hash, and freshness. Verified on a local fixture chain and on Portaldot V3 Testnet (2026-10-21).',
   },
   {
     title: 'Milestone 2: Portaldot-native resource tools',

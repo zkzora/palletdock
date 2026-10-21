@@ -2,9 +2,9 @@
 
 For the next agent or developer. Read IMPLEMENTATION_STATUS.md first.
 
-## Where things stand (2026-10-08)
+## Where things stand (2026-10-21)
 
-The full MVP workflow is implemented and passes automated tests, including a browser E2E vertical slice on a local fixture chain. The one remaining acceptance item is **live verification on Portaldot V3 Testnet**: both public RPCs returned HTTP 502 for the entire session, so no fingerprint was activated and no live transaction exists. Do not claim live completion until WALKTHROUGH.md has been run by a human with a funded wallet and TESTNET_EVIDENCE.md is filled in.
+The full MVP workflow is implemented, passes automated tests (including a browser E2E vertical slice on a local fixture chain), and has run live on Portaldot V3 Testnet: deploy → `store(42)` → indexed event → read API, recorded in TESTNET_EVIDENCE.md. That run was signed with a scripted EIP-1193 signer holding the owner's test key, through the PalletDock UI. RPC-interruption recovery was also verified live (docs/evidence/2026-10-21-live). Still open live: worker restart with a new event while stopped (WALKTHROUGH.md step 6.1).
 
 ## Repository conventions
 
@@ -50,8 +50,8 @@ On Linux the fixture stack stops its children by process group; on Windows use `
 
 ## Next steps, in priority order
 
-1. **Live walkthrough** (WALKTHROUGH.md): network identity is verified on the new endpoints, so this now only needs a human with a funded wallet approving each prompt. Configure the indexer within ~26 minutes of deploying (node retains 258 blocks). Record TESTNET_EVIDENCE.md. Do not change the network or accept a reset without the owner's approval.
-2. Verify the EVM unit policy from the live balance comparison (wallet EVM balance vs native free balance of the mapped account).
+1. **Finish the live walkthrough**: step 6.1 (worker restart with `store(43)` while stopped; the RPC-interruption check is done). Configure any new indexer source within ~26 minutes of its start block (node retains 258 blocks). Do not change the network or accept a reset without the owner's approval.
+2. ~~Verify the EVM unit policy~~ Done 2026-10-19: `eth_getBalance` = (native free − existential deposit) × 10⁴ (TESTNET_EVIDENCE.md).
 3. Replacement-transaction linking by nonce.
 4. A finality adapter: the node exposes `finalized`/`safe` tags and GRANDPA is present, but nothing is claimed until a tested adapter links EVM blocks to native finality.
 

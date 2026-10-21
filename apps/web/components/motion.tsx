@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** True when the user asked the system for reduced motion. */
 export function prefersReducedMotion(): boolean {
@@ -36,6 +36,33 @@ export function useReveal<T extends HTMLElement>() {
     return () => io.disconnect();
   }, []);
   return ref;
+}
+
+/**
+ * True while the element is in the viewport. With `once`, it latches true the
+ * first time (used to draw figures once). Reduced motion reports true at once.
+ */
+export function useInView<T extends HTMLElement>({ once = false, rootMargin = '0px 0px -12% 0px' }: { once?: boolean; rootMargin?: string } = {}) {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined' || (once && prefersReducedMotion())) {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        setInView(e.isIntersecting);
+        if (once && e.isIntersecting) io.disconnect();
+      },
+      { rootMargin, threshold: 0.15 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [once, rootMargin]);
+  return [ref, inView] as const;
 }
 
 /** Wrapper that reveals its `.reveal` descendants on scroll. */

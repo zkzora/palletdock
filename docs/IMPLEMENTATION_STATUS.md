@@ -1,12 +1,12 @@
 # Implementation Status
 
-Updated: 2026-10-09.
+Updated: 2026-10-21.
 
 Three separate questions per area:
 
 - **Implemented**: the code exists in `main`.
 - **Locally tested**: an automated check passed: unit/integration tests (real PostgreSQL), browser E2E on the *fixture chain* (local Hardhat EVM, chain ID 420420777, labelled FIXTURE NETWORK), CI, or Docker. Not evidence about Portaldot.
-- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. As of 2026-10-17 (new `portaldot.dev` endpoints): network identity, account mapping, and read-only capabilities are live-verified; wallet-signed transactions are still pending (TESTNET_EVIDENCE.md).
+- **Live-testnet verified**: observed on Portaldot V3 Testnet itself. As of 2026-10-21: network identity, account mapping, funding and the EVM unit policy, and the deploy → write → index → API chain are live-verified (signed by the owner with a scripted EIP-1193 signer through the PalletDock UI; see TESTNET_EVIDENCE.md). RPC-interruption recovery is live-verified (safe failure, clear error, recovery from checkpoint, no duplicates); worker restart with a new event is not yet run live.
 
 ## Verification runs
 
@@ -31,33 +31,32 @@ Three separate questions per area:
 | Identity fingerprint, mismatch halt | ✓ | ✓ (pruned-node and codec-wrapper cases tested) | ✓ fingerprint active 2026-10-17 |
 | Bounded RPC backoff (probes, receipts, indexer) | ✓ | ✓ `Backoff` + overlap test; worker log spacing measured | n/a |
 | Network reset migration (manual, `--confirm`) | ✓ | ✓ `network-reset.test.ts` | not run (needs your approval) |
-| Lossless quantities, EVM unit policy (raw) | ✓ | ✓ | ✗ EVM denomination unverified |
+| Lossless quantities, EVM unit policy (raw) | ✓ | ✓ | ✓ denomination verified 2026-10-19 (×10⁴, minus existential deposit) |
 | Artifact/ABI validation, argument coercion | ✓ | ✓ `abi.test.ts` | – |
-| Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ◐ deploy simulated read-only (code matches); not broadcast |
+| Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ✓ PalletDockStorage deployed 2026-10-21; runtime code identical to the compiled artifact |
 | Owner auth, sessions, CSRF, login limits | ✓ | ✓ `api.test.ts` | n/a |
 | Projects, archive/restore, export | ✓ | ✓ API + fixture E2E | n/a |
 | Owner/project isolation | ✓ | ✓ every workspace route | n/a |
 | Contract import (code check), ABI versions, remove | ✓ | ✓ API + fixture E2E | ✗ |
-| Read (eth_call), lossless output | ✓ | ✓ | ✗ |
-| Write/deploy preparation, fee estimate, revert decoding | ✓ | ✓ (custom error decode; deploy + write on fixture) | ✗ |
-| Storage-deposit dry run (reviveApi) | ✓ | unavailable path; failed-dispatch path | ◐ API shape confirmed; needs a funded origin for a value |
+| Read (eth_call), lossless output | ✓ | ✓ | ◐ `retrieve()` via eth_call returns 42; UI read not part of the live run |
+| Write/deploy preparation, fee estimate, revert decoding | ✓ | ✓ (custom error decode; deploy + write on fixture) | ✓ deploy and `store(42)` prepared, estimated, and executed (2026-10-21); revert decoding not exercised live |
+| Storage-deposit dry run (reviveApi) | ✓ | unavailable path; failed-dispatch path | ✓ instantiate dry run returned a charge (2,878,800,000,000,000 base units) for the funded deployer |
 | Account mapping (reviveApi.accountId) | ✓ | codec unit test | ✓ read-only mapping at a finalized block |
 | Wallet: wrong network, sender change, rejection, insufficient funds, unknown/timeout, late hash | ✓ | ✓ `wallet-core.test.ts`, fixture E2E rejection | ✗ |
-| Submission state machine | ✓ | ✓ | ✗ |
-| Receipt tracker: inclusion, revert, disappearance → reorged_out, re-inclusion, sender/recipient match, deploy → contract | ✓ | ✓ `tx-tracker.test.ts` (dedicated) | ✗ |
-| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ✗ |
+| Submission state machine | ✓ | ✓ | ◐ success path (wallet hash → included → executed) |
+| Receipt tracker: inclusion, revert, disappearance → reorged_out, re-inclusion, sender/recipient match, deploy → contract | ✓ | ✓ `tx-tracker.test.ts` (dedicated) | ◐ inclusion, execution, and deploy → contract observed; revert and reorg paths not observed |
+| Indexer: leases, fencing, adaptive ranges, backoff, atomic commit, empty ranges, duplicates, restart, concurrent workers, archive-during-fetch | ✓ | ✓ `indexer.test.ts` (13) | ◐ backfill from the deployment block, atomic commit, following with lag 0, RPC failure → backoff → recovery without duplicates; restart and concurrency not run live |
 | Indexer: reorg rollback/replacement, deep reorg or pruned history → recovery_required | ✓ | ✓ | ✗ |
-| Read API v1, keys, redaction, snapshot cursors | ✓ | ✓ `api.test.ts`, `cursor.test.ts` | ✗ |
+| Read API v1, keys, redaction, snapshot cursors | ✓ | ✓ `api.test.ts`, `cursor.test.ts` | ◐ events endpoint 200 with a scoped key (`req_928DQZqiuWqf`); cursors not exercised live |
 | OpenAPI conformance | ✓ | ✓ `openapi.test.ts` | n/a |
 | Monitoring and request logging | ✓ | ✓ | ✓ live probes responding |
-| Web UI (design port), mobile layout | ✓ | ✓ fixture E2E desktop + mobile | ✗ |
+| Web UI (design port), mobile layout | ✓ | ✓ fixture E2E desktop + mobile | ✓ desktop flow used for the live run |
 | Docker image + compose | ✓ | ✓ CI docker job | n/a |
 | CI | ✓ | ✓ two green runs | n/a |
-| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture only | **Pending human wallet** |
+| Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture | ✓ deploy → write → index → API and RPC-interruption recovery (2026-10-21); worker restart not yet run live |
 
 ## Open items
 
-- Live walkthrough (WALKTHROUGH.md) once the RPCs answer; then record evidence.
-- If Revive rejects the EVM bytecode: PolkaVM (resolc) builds of the samples.
-- Live capability probes (fee history, `finalized` tag, `eth_getLogs` range limit) and a verified EVM unit policy.
+- Live worker-restart check with a new event while stopped (WALKTHROUGH.md step 6.1).
+- A MetaMask-approved run of the same flow (the 2026-10-21 run used a scripted EIP-1193 signer).
 - Replacement-transaction linking by nonce.

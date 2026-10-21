@@ -37,7 +37,7 @@ export const DOCS: Doc[] = [
     title: 'PalletDock Documentation',
     intro: 'Build with the correct Portaldot network, account, and data context.',
     meta: [
-      ['Status', 'Network instructions describe Portaldot V3. Workspace, indexer, and API instructions describe the implemented PalletDock testnet MVP. Network identity is live-verified on the new endpoints; the wallet-signed deployment run is pending.'],
+      ['Status', 'Network instructions describe Portaldot V3. Workspace, indexer, and API instructions describe the implemented PalletDock testnet MVP. Network identity is live-verified, and the deploy → write → index → API flow ran live on Portaldot V3 Testnet on 2026-10-21.'],
       ['Source', 'Portaldot V3 developer guide · this repository'],
     ],
     blocks: [
@@ -77,7 +77,7 @@ export const DOCS: Doc[] = [
     slug: 'getting-started',
     group: 'Getting started',
     title: 'Getting Started',
-    meta: [['Applies to', 'Portaldot V3 Testnet'], ['Status', 'Network preparation and the PalletDock workspace are implemented; live testnet acceptance is pending RPC availability.']],
+    meta: [['Applies to', 'Portaldot V3 Testnet'], ['Status', 'Network preparation and the PalletDock workspace are implemented; both ran live on Portaldot V3 Testnet on 2026-10-21.']],
     blocks: [
       ['h', 'What you will prove'],
       ['p', 'The first workflow is deliberately concrete: deploy a contract, execute one write that emits an event, retain its receipt, index that event, and return it through a project API.'],
@@ -235,7 +235,7 @@ export const DOCS: Doc[] = [
     slug: 'deploy',
     group: 'Contracts',
     title: 'Deploy A Solidity Contract',
-    meta: [['Status', 'The official guide documents an EVM/Remix path. PalletDock also deploys from your browser wallet. Revive compatibility of the bundled bytecode is not yet confirmed on the live testnet.']],
+    meta: [['Status', 'The official guide documents an EVM/Remix path. PalletDock also deploys from your browser wallet. The bundled PalletDockStorage bytecode deployed on the live testnet on 2026-10-21 (block 133019); its runtime code matches the compiled artifact.']],
     blocks: [
       ['h', 'Example contract'],
       ['p', 'This original test contract stores a number and emits an event. It has no constructor arguments and no token-value requirement.'],
@@ -382,7 +382,7 @@ export const DOCS: Doc[] = [
     slug: 'indexer',
     group: 'Data and APIs',
     title: 'Indexing And Finality',
-    meta: [['Status', 'Implemented for EVM contract logs and tested (including reorg and recovery) on a fixture chain; live testnet run pending.']],
+    meta: [['Status', 'Implemented for EVM contract logs and tested (including reorg and recovery) on a fixture chain; a live NumberChanged event was indexed on 2026-10-21. RPC-interruption recovery was verified live the same day; a live worker-restart check is not yet run.']],
     blocks: [
       ['h', 'What the indexer does'],
       ['p', 'An indexer reads a bounded source, stores identifiable records, and reports which range was successfully covered. It cannot turn absent data into evidence that an event never happened outside its coverage.'],
@@ -560,11 +560,11 @@ export const DOCS: Doc[] = [
     title: 'Limitations',
     blocks: [
       ['bullets', [
-        'Network identity and capabilities are live-verified on the new endpoints (2026-10-17), and a read-only deploy simulation of the bundled bytecode succeeded. A wallet-signed deployment, write, and indexed event on the live testnet are still pending.',
+        'The deploy → write → index → API flow ran live on Portaldot V3 Testnet on 2026-10-21 (contract `0xdd982913cb04f9e438437e2137ba1452e4b211ed`). RPC-interruption recovery was verified live the same day; worker restart with a new event is tested deterministically but not yet on the live network.',
         'The RPC node keeps block state for only ~258 blocks (~26 minutes); the indexer needs a recent start block and a running worker.',
         'Finality is always unknown. No verified finality adapter exists.',
         'Storage-deposit estimates use the runtime dry run only when metadata exposes a compatible `reviveApi` call; otherwise they are unavailable with a reason. Deposits are not read from receipts.',
-        'EVM unit denomination is unverified; amounts are raw base units.',
+        'The EVM view reports balances as (native free − existential deposit) × 10⁴ (verified 2026-10-19). PalletDock still displays raw base units.',
         'Only EVM contract logs are indexed. Native events, native signing, Assets/Uniques/Nfts management, ink!, bridges, tracing, source verification, team roles, and billing are not implemented.',
         'Linked libraries are not supported in uploaded artifacts.',
         'One owner per deployment; not independently audited.',

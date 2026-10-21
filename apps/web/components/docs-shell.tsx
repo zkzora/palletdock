@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Fragment, useEffect, useState } from 'react';
 import { useScrolledHeader, useSpotlight } from '@/components/motion';
+import { SiteFooter } from '@/components/site-footer';
 
 /** Header, status strip, and footer from the PalletDock Docs design export. */
 export function DocsShell({ children, section = 'Docs' }: { children: React.ReactNode; section?: string }) {
@@ -42,14 +43,7 @@ export function DocsShell({ children, section = 'Docs' }: { children: React.Reac
         </div>
       </header>
       {children}
-      <footer style={{ borderTop: '1px solid #222429' }}>
-        <div style={{ maxWidth: 1320, margin: '0 auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5, color: '#8a8f98' }}>
-          <span>PalletDock · independent tooling. Its API is not an official Portaldot RPC specification.</span>
-          <span>
-            <Link href="/faq">FAQ</Link> · <Link href="/roadmap">Roadmap</Link> · <Link href="/support">Support</Link>
-          </span>
-        </div>
-      </footer>
+      <SiteFooter wide />
     </div>
   );
 }
