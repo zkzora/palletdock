@@ -235,6 +235,10 @@ components:
             committedAt: { type: string, format: date-time }
         coverage:
           type: array
+          description: >-
+            Read in the same database snapshot as the response's rows (events pages use one REPEATABLE READ
+            transaction), so completed.toBlock is the coverage those rows were read against. A later /indexer
+            response may report a newer checkpoint; that is liveness, not coverage of this snapshot.
           items:
             type: object
             properties:
@@ -246,6 +250,7 @@ components:
               latestObservedBlock: { $ref: '#/components/schemas/NullableIntegerString' }
               latestObservedAt: { type: [string, 'null'], format: date-time }
               lagBlocks: { $ref: '#/components/schemas/NullableIntegerString' }
+              reorgEpoch: { $ref: '#/components/schemas/UnsignedIntegerString', description: Source reorg epoch in the same database snapshot as this response }
         finalityPolicy: { const: included-with-explicit-finality }
         finality: { const: unknown }
         finalityNote: { type: string }
@@ -312,6 +317,10 @@ components:
         gasUsed: { $ref: '#/components/schemas/NullableIntegerString' }
         effectiveGasPriceRaw: { $ref: '#/components/schemas/NullableIntegerString' }
         feeRaw: { $ref: '#/components/schemas/NullableIntegerString' }
+        trackingStatus:
+          type: string
+          enum: [active, settled, history_pruned, gave_up]
+          description: Receipt-tracking condition, separate from the transaction statuses. history_pruned means the node no longer serves the receipt or block and the last observed inclusion is kept; it is not a failure or a reorganization. settled means checks stopped at the confirmation depth; finality is still unknown.
         unitNote: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

@@ -12,4 +12,6 @@ export const NETWORK = {
   chainIdHex: '0x190f1ca9',
   rpcUrl: 'https://test-evm-rpc-v3.portaldot.dev',
   symbol: 'tPOT',
+  /** Native genesis of the verified Portaldot V3 Testnet fingerprint; fixture chains differ. */
+  genesisHash: '0xd4f9acbcf7f52388d8b095abe3c198d19fc510e0343e643e87cfbccb155283bd',
 } as const;

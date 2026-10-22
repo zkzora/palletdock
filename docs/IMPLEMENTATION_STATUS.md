@@ -1,6 +1,6 @@
 # Implementation Status
 
-Updated: 2026-10-21.
+Updated: 2026-10-22.
 
 Three separate questions per area:
 
@@ -54,6 +54,7 @@ Three separate questions per area:
 | Docker image + compose | ✓ | ✓ CI docker job | n/a |
 | CI | ✓ | ✓ two green runs | n/a |
 | Live acceptance chain (deploy → write → index → API → restart/interruption) | ✓ (code path) | ✓ fixture | ✓ deploy → write → index → API, RPC-interruption recovery, and worker restart (2026-10-21) |
+| Consumer demo (`/consumer`): public `/v1` only, server-side read key, owner-session gate by default with an explicit public read-only demo flag, identity-keyed reconciliation, snapshot restart, absence from the events snapshot's own coverage (events page read in one REPEATABLE READ transaction), generation check between `/events` and `/indexer`, freshness from indexer metadata, finality as reported; `/v1` transactions expose `trackingStatus` | ✓ | ✓ `consumer-core.test.ts` (21), `consumer-server.test.ts` (5), consumer core against the real `/v1` routes with a rollback between pages and a worker commit between `/events` and `/indexer` (`api.test.ts`), fixture E2E `fixture-consumer.spec.ts` (5) | ✓ read live data on the dev stack 2026-10-21: normal view, worker stopped → *Possibly out of date*, worker back, API down → *API unavailable*, recovered; pruned history shown from recorded data. ✓ live new event while the worker was stopped (owner's `store(44)`, block 137978): stale with 43 kept, then 44 with exactly 3 events after recovery, reload, and refresh ([evidence](evidence/2026-10-21-consumer-new-event/)) |
 
 ## Open items
 

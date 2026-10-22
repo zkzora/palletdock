@@ -28,6 +28,7 @@ import {
 } from '@palletdock/shared';
 import { registerRequestLogging, registerV1 } from './v1.js';
 import { registerWorkspace, type WorkspaceDeps } from './workspace.js';
+import { listenOptions } from './listen.js';
 import {
   SESSION_COOKIE,
   cursorSecret,
@@ -321,7 +322,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
 }
 
 if (process.env.NODE_ENV !== 'test') {
-  const host = process.env.API_HOST ?? '127.0.0.1';
+  const { host, port } = listenOptions();
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
   if (process.env.NODE_ENV === 'production' && process.env.SESSION_COOKIE_SECURE !== '1') {
     throw new Error('Refusing to start in production without SESSION_COOKIE_SECURE=1 (HTTPS-only session cookies).');
@@ -330,7 +331,6 @@ if (process.env.NODE_ENV !== 'test') {
     console.warn(`[api] listening on ${host} outside production mode. Use only on a private network.`);
   }
   const app = await buildServer();
-  const port = Number(process.env.API_PORT ?? 4100);
   await app.listen({ host, port });
 }
 

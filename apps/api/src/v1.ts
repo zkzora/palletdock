@@ -52,7 +52,7 @@ function oneOf(q: Record<string, unknown>, key: string, values: string[]): strin
   return v;
 }
 
-export async function projectMeta(pool: pg.Pool, projectId: string) {
+export async function projectMeta(pool: pg.Pool | pg.PoolClient, projectId: string) {
   const [fp, sources] = await Promise.all([
     pool.query(`SELECT id, genesis_hash, evm_chain_id::text, last_verified_at FROM network_fingerprints WHERE network_id='portaldot-v3-testnet' AND status='active' LIMIT 1`),
     pool.query(
@@ -80,6 +80,7 @@ export async function projectMeta(pool: pg.Pool, projectId: string) {
       latestObservedBlock: s.latest_observed_block,
       latestObservedAt: s.latest_observed_at,
       lagBlocks: s.cp_block && s.latest_observed_block ? String(BigInt(s.latest_observed_block) > BigInt(s.cp_block) ? BigInt(s.latest_observed_block) - BigInt(s.cp_block) : 0n) : null,
+      reorgEpoch: s.reorg_epoch,
     })),
     finalityPolicy: 'included-with-explicit-finality' as const,
     finality: 'unknown' as const,
@@ -123,6 +124,22 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
     return decodeCursor(q.cursor, { resource, projectId, filterHash }, secret);
   }
 
+  /** Runs fn in one REPEATABLE READ, read-only transaction, so every query in it sees the same database snapshot. */
+  async function inSnapshot<T>(fn: (db: pg.PoolClient) => Promise<T>): Promise<T> {
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const out = await fn(db);
+      await db.query('COMMIT');
+      return out;
+    } catch (e) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      db.release();
+    }
+  }
+
   function respond(request: FastifyRequest, data: unknown[], nextCursor: string | null, meta: Awaited<ReturnType<typeof projectMeta>>, extra: Record<string, unknown> = {}) {
     return { requestId: request.id, data, nextCursor, meta: { ...publicMeta(meta), ...extra } };
   }
@@ -145,87 +162,91 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
     } catch (e) {
       return fail(reply, 'INVALID_QUERY', (e as Error).message);
     }
-    const meta = await projectMeta(pool, projectId);
-    let snapshot: string;
-    let after: string[] = [];
-    try {
-      const c = cursorOf(q, 'events', projectId, filterHash);
-      if (c) {
-        const [seq, fpId, epochs] = c.snapshot.split('|');
-        if (fpId !== meta._fingerprintId) throw new Error('The network fingerprint changed since this cursor was issued. Restart pagination without a cursor.');
-        if (epochs !== meta._epochs) throw new Error('Indexed data was rolled back or reindexed since this cursor was issued. Restart pagination without a cursor.');
-        if (!/^[0-9]+$/.test(seq) || c.after.length !== 4 || c.after.some((x) => !/^[0-9]+$/.test(x))) throw new Error('Cursor position is invalid.');
-        snapshot = c.snapshot;
-        after = c.after;
-      } else {
-        const max = (await pool.query('SELECT COALESCE(max(seq),0)::text AS s FROM raw_logs WHERE project_id=$1', [projectId])).rows[0].s;
-        snapshot = `${max}|${meta._fingerprintId}|${meta._epochs}`;
+    // Meta (coverage, fingerprint, reorg epochs), the snapshot bound and the rows come from one database
+    // snapshot: a worker commit between these queries cannot make a page report coverage its rows were not read at.
+    return inSnapshot(async (db) => {
+      const meta = await projectMeta(db, projectId);
+      let snapshot: string;
+      let after: string[] = [];
+      try {
+        const c = cursorOf(q, 'events', projectId, filterHash);
+        if (c) {
+          const [seq, fpId, epochs] = c.snapshot.split('|');
+          if (fpId !== meta._fingerprintId) throw new Error('The network fingerprint changed since this cursor was issued. Restart pagination without a cursor.');
+          if (epochs !== meta._epochs) throw new Error('Indexed data was rolled back or reindexed since this cursor was issued. Restart pagination without a cursor.');
+          if (!/^[0-9]+$/.test(seq) || c.after.length !== 4 || c.after.some((x) => !/^[0-9]+$/.test(x))) throw new Error('Cursor position is invalid.');
+          snapshot = c.snapshot;
+          after = c.after;
+        } else {
+          const max = (await db.query('SELECT COALESCE(max(seq),0)::text AS s FROM raw_logs WHERE project_id=$1', [projectId])).rows[0].s;
+          snapshot = `${max}|${meta._fingerprintId}|${meta._epochs}`;
+        }
+      } catch (e) {
+        return fail(reply, 'CURSOR_RESTART_REQUIRED', (e as Error).message);
       }
-    } catch (e) {
-      return fail(reply, 'CURSOR_RESTART_REQUIRED', (e as Error).message);
-    }
-    if (finality === 'finalized') {
-      // Nothing is proven finalized; an empty result here is explicit, not missing data.
-      return respond(request, [], null, meta, { filterNote: 'No record is marked finalized because no verified finality adapter exists.' });
-    }
-    const values: unknown[] = [projectId, snapshot.split('|')[0], meta._fingerprintId === 'none' ? null : meta._fingerprintId];
-    const cond = ['r.project_id=$1', 'r.canonical=true', 'r.seq <= $2::bigint', 'r.fingerprint_id = $3::uuid', `s.desired_state <> 'deleted'`];
-    const push = (sql: (i: number) => string, v: unknown) => {
-      values.push(v);
-      cond.push(sql(values.length));
-    };
-    if (after.length) {
-      values.push(after[0], after[1], after[2], after[3]);
-      const n = values.length;
-      cond.push(`(r.block_number, r.transaction_index, r.log_index, r.seq) > ($${n - 3}::bigint, $${n - 2}::int, $${n - 1}::int, $${n}::bigint)`);
-    }
-    if (fromBlock) push((i) => `r.block_number >= $${i}::bigint`, fromBlock);
-    if (toBlock) push((i) => `r.block_number <= $${i}::bigint`, toBlock);
-    if (contract) push((i) => `r.contract_address = $${i}`, contract);
-    if (typeof q.event === 'string' && q.event) push((i) => `(d.event_name = $${i} OR d.event_signature = $${i})`, q.event);
-    values.push(limit + 1);
-    const rows = (
-      await pool.query(
-        `SELECT r.id, r.seq::text, r.source_id, r.contract_address, r.block_number::text, r.block_hash, r.transaction_hash, r.transaction_index, r.log_index,
-                r.topics, r.data, r.indexed_at, d.status AS decode_status, d.event_name, d.event_signature, d.args, d.decode_error,
-                av.version AS abi_version
-           FROM raw_logs r
-           JOIN indexer_sources s ON s.id=r.source_id
-           LEFT JOIN decoded_events d ON d.raw_log_id=r.id
-           LEFT JOIN abi_versions av ON av.id=d.abi_version_id
-          WHERE ${cond.join(' AND ')}
-          ORDER BY r.block_number, r.transaction_index, r.log_index, r.seq
-          LIMIT $${values.length}`,
-        values,
-      )
-    ).rows;
-    const page = rows.slice(0, limit);
-    const last = page.at(-1);
-    const next =
-      rows.length > limit && last
-        ? encodeCursor({ resource: 'events', projectId, filterHash, snapshot, after: [last.block_number, String(last.transaction_index), String(last.log_index), last.seq] }, secret)
-        : null;
-    const data = page.map((r) => ({
-      id: r.id,
-      networkId: 'portaldot-v3-testnet',
-      chainLayer: 'evm',
-      contractAddress: r.contract_address,
-      blockNumber: r.block_number,
-      blockHash: r.block_hash,
-      transactionHash: r.transaction_hash,
-      transactionIndex: r.transaction_index,
-      logIndex: r.log_index,
-      topics: r.topics,
-      data: r.data,
-      decodeStatus: r.decode_status ?? 'not_decoded',
-      event: r.decode_status === 'decoded' ? { name: r.event_name, signature: r.event_signature, args: r.args } : null,
-      decodeError: r.decode_error,
-      abiVersion: r.abi_version,
-      indexedAt: r.indexed_at,
-      sourceId: r.source_id,
-      finality: 'unknown',
-    }));
-    return respond(request, data, next, meta);
+      if (finality === 'finalized') {
+        // Nothing is proven finalized; an empty result here is explicit, not missing data.
+        return respond(request, [], null, meta, { filterNote: 'No record is marked finalized because no verified finality adapter exists.' });
+      }
+      const values: unknown[] = [projectId, snapshot.split('|')[0], meta._fingerprintId === 'none' ? null : meta._fingerprintId];
+      const cond = ['r.project_id=$1', 'r.canonical=true', 'r.seq <= $2::bigint', 'r.fingerprint_id = $3::uuid', `s.desired_state <> 'deleted'`];
+      const push = (sql: (i: number) => string, v: unknown) => {
+        values.push(v);
+        cond.push(sql(values.length));
+      };
+      if (after.length) {
+        values.push(after[0], after[1], after[2], after[3]);
+        const n = values.length;
+        cond.push(`(r.block_number, r.transaction_index, r.log_index, r.seq) > ($${n - 3}::bigint, $${n - 2}::int, $${n - 1}::int, $${n}::bigint)`);
+      }
+      if (fromBlock) push((i) => `r.block_number >= $${i}::bigint`, fromBlock);
+      if (toBlock) push((i) => `r.block_number <= $${i}::bigint`, toBlock);
+      if (contract) push((i) => `r.contract_address = $${i}`, contract);
+      if (typeof q.event === 'string' && q.event) push((i) => `(d.event_name = $${i} OR d.event_signature = $${i})`, q.event);
+      values.push(limit + 1);
+      const rows = (
+        await db.query(
+          `SELECT r.id, r.seq::text, r.source_id, r.contract_address, r.block_number::text, r.block_hash, r.transaction_hash, r.transaction_index, r.log_index,
+                  r.topics, r.data, r.indexed_at, d.status AS decode_status, d.event_name, d.event_signature, d.args, d.decode_error,
+                  av.version AS abi_version
+             FROM raw_logs r
+             JOIN indexer_sources s ON s.id=r.source_id
+             LEFT JOIN decoded_events d ON d.raw_log_id=r.id
+             LEFT JOIN abi_versions av ON av.id=d.abi_version_id
+            WHERE ${cond.join(' AND ')}
+            ORDER BY r.block_number, r.transaction_index, r.log_index, r.seq
+            LIMIT $${values.length}`,
+          values,
+        )
+      ).rows;
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
+      const next =
+        rows.length > limit && last
+          ? encodeCursor({ resource: 'events', projectId, filterHash, snapshot, after: [last.block_number, String(last.transaction_index), String(last.log_index), last.seq] }, secret)
+          : null;
+      const data = page.map((r) => ({
+        id: r.id,
+        networkId: 'portaldot-v3-testnet',
+        chainLayer: 'evm',
+        contractAddress: r.contract_address,
+        blockNumber: r.block_number,
+        blockHash: r.block_hash,
+        transactionHash: r.transaction_hash,
+        transactionIndex: r.transaction_index,
+        logIndex: r.log_index,
+        topics: r.topics,
+        data: r.data,
+        decodeStatus: r.decode_status ?? 'not_decoded',
+        event: r.decode_status === 'decoded' ? { name: r.event_name, signature: r.event_signature, args: r.args } : null,
+        decodeError: r.decode_error,
+        abiVersion: r.abi_version,
+        indexedAt: r.indexed_at,
+        sourceId: r.source_id,
+        finality: 'unknown',
+      }));
+      return respond(request, data, next, meta);
+    });
   });
 
   // ------------------------------------------------------------------ contracts
@@ -345,7 +366,7 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
       await pool.query(
         `SELECT t.id, t.origin, t.kind, t.hash, t.from_address, t.to_address, t.contract_address, t.function_name, t.decoded_args, t.value_raw::text,
                 t.submission_status, t.inclusion_status, t.execution_status, t.finality_status, t.indexing_status, t.block_number::text, t.block_hash,
-                t.gas_used::text, t.effective_gas_price::text, t.fee_raw::text, t.created_at, t.updated_at
+                t.gas_used::text, t.effective_gas_price::text, t.fee_raw::text, t.tracking_status, t.created_at, t.updated_at
            FROM transactions t WHERE ${cond.join(' AND ')} ORDER BY t.created_at DESC, t.id DESC LIMIT $${values.length}`,
         values,
       )
@@ -375,6 +396,7 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
         gasUsed: t.gas_used,
         effectiveGasPriceRaw: t.effective_gas_price,
         feeRaw: t.fee_raw,
+        trackingStatus: t.tracking_status,
         unitNote,
         createdAt: t.created_at,
         updatedAt: t.updated_at,
@@ -396,17 +418,20 @@ export function registerV1(app: FastifyInstance, pool: pg.Pool) {
     } catch (e) {
       return fail(reply, 'INVALID_QUERY', (e as Error).message);
     }
-    const meta = await projectMeta(pool, projectId);
-    const rows = (
-      await pool.query(
-        `SELECT s.id, s.contract_id, s.contract_address, s.event_names, s.start_block::text, s.end_block::text, s.desired_state, s.status,
+    // Same database snapshot for the meta and the source rows, so their fingerprint and reorg epochs agree.
+    const { meta, rows } = await inSnapshot(async (db) => ({
+      meta: await projectMeta(db, projectId),
+      rows: (
+        await db.query(
+          `SELECT s.id, s.contract_id, s.contract_address, s.event_names, s.start_block::text, s.end_block::text, s.desired_state, s.status,
                 s.reorg_epoch::text, s.last_error, s.last_error_at, s.latest_observed_block::text, s.latest_observed_at, s.finality_policy, s.created_at,
                 c.block_number::text AS cp_block, c.block_hash AS cp_hash, c.committed_at AS cp_at, av.version AS abi_version
            FROM indexer_sources s LEFT JOIN indexer_checkpoints c ON c.source_id=s.id JOIN abi_versions av ON av.id=s.abi_version_id
           WHERE s.project_id=$1 AND s.desired_state <> 'deleted' ORDER BY s.created_at`,
-        [projectId],
-      )
-    ).rows;
+          [projectId],
+        )
+      ).rows,
+    }));
     return respond(
       request,
       rows.map((s) => ({

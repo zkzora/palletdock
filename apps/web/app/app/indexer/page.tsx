@@ -173,8 +173,8 @@ export default function IndexerPage() {
         </Notice>
       )}
       {src.status === 'recovery_required' && (
-        <Notice tone="danger" title="Recovery required" action={<button className="button secondary" disabled={readOnly} onClick={() => void act('reindex', 'Reindex started from the start block.')}>Reindex from start</button>}>
-          {src.last_error} Stored records are kept as history; reindexing restarts coverage at block {groupDigits(src.start_block)}.
+        <Notice tone="danger" title="Recovery required" action={<button className="button secondary" disabled={readOnly} onClick={() => setEditing({ replace: src.id })}>Choose recent start block</button>}>
+          {src.last_error} The original start block {groupDigits(src.start_block)} may no longer be retained. Saving a recent start block validates it before replacing this source. Stored records stay available as non-canonical history.
         </Notice>
       )}
       {src.desired_state === 'archived' && <Notice tone="info">{readOnly ? 'The project is archived, so this source is stopped. Restore the project in Settings, then resume here.' : 'Indexing stopped when the project was archived. Resume to continue from the stored checkpoint.'}</Notice>}
@@ -376,17 +376,17 @@ function SourceForm({ contracts, replace, onCancel, onSaved }: { contracts: Arra
         <div className="two-column" style={{ gap: 12 }}>
           <div className="field">
             <label htmlFor="ix-start">Start block</label>
-            <input id="ix-start" className="input mono" value={start} onChange={(e) => setStart(e.target.value)} aria-invalid={!!errs.start} />
-            {errs.start && <p className="field-error">{errs.start}</p>}
-            <span className="dim" style={{ fontSize: 11.5 }}>{detail.data?.data.deployBlock ? `Deployment block ${groupDigits(detail.data.data.deployBlock)}` : 'Deployment block not recorded; choose a block at or before deployment.'}</span>
+            <input id="ix-start" className="input mono" value={start} onChange={(e) => setStart(e.target.value)} inputMode="numeric" spellCheck={false} aria-invalid={!!errs.start} aria-describedby={`ix-start-${errs.start ? 'error' : 'help'}`} />
+            {errs.start && <p id="ix-start-error" className="field-error">{errs.start}</p>}
+            <span id="ix-start-help" className="dim" style={{ fontSize: 11.5 }}>{detail.data?.data.deployBlock ? `Deployment block ${groupDigits(detail.data.data.deployBlock)}. The RPC must still retain the chosen block.` : 'Deployment block not recorded; choose a retained block at or before deployment.'}</span>
           </div>
           <div className="field">
             <label htmlFor="ix-end">
               End block <span className="dim">optional</span>
             </label>
-            <input id="ix-end" className="input mono" value={end} onChange={(e) => setEnd(e.target.value)} placeholder="follow latest observed" aria-invalid={!!errs.end} />
-            {errs.end && <p className="field-error">{errs.end}</p>}
-            <span className="dim" style={{ fontSize: 11.5 }}>Blank keeps following the latest observed EVM block.</span>
+            <input id="ix-end" className="input mono" value={end} onChange={(e) => setEnd(e.target.value)} inputMode="numeric" spellCheck={false} placeholder="follow latest observed" aria-invalid={!!errs.end} aria-describedby={`ix-end-${errs.end ? 'error' : 'help'}`} />
+            {errs.end && <p id="ix-end-error" className="field-error">{errs.end}</p>}
+            <span id="ix-end-help" className="dim" style={{ fontSize: 11.5 }}>Blank keeps following the latest observed EVM block.</span>
           </div>
         </div>
         <p className="dim" style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5 }}>

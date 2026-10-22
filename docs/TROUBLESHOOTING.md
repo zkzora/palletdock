@@ -5,7 +5,7 @@
 | Chain-bound buttons fail with "network identity has not been verified" | No active fingerprint. Run `pnpm network:verify`; check Monitoring probes. During the 2026-10-08 outage both Portaldot RPCs returned HTTP 502. |
 | Worker logs `network mismatch` | Genesis or chain ID changed (testnet reset). Review, then `pnpm network:accept-reset --confirm`. |
 | Indexer *Needs attention* | RPC errors; the worker retries with backoff from the checkpoint. **Reconnect** retries immediately. |
-| Indexer *Recovery required* | Reorg deeper than retained headers, or the source belongs to a superseded network. Use **Reindex from start**, or re-import on the new network. |
+| Indexer *Recovery required* | The source needs a range the RPC no longer retains, the reorg is deeper than retained headers, or the source belongs to a superseded network. Use **Edit configuration** to choose a retained start block and create fresh coverage, or re-import on the new network. Stored records remain as non-canonical history. |
 | Wallet shows the wrong network | Use **Switch to Portaldot V3** in the signer dialog. Writes are blocked unless the chain is 0x190f1ca9 at signing time. |
 | "Submission could not be confirmed" | The wallet timed out or returned an ambiguous error. Use **Check account activity** (receipt lookup or nonce) before retrying. Never resubmit blindly. |
 | Native account is funded but the EVM deployer is not | Resolve the mapping again for the exact EVM address; fund the returned SS58 account. |

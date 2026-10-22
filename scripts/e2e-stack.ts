@@ -22,7 +22,10 @@ import { createPool, hashPassword, migrate } from '@palletdock/db';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PORTS = { web: Number(process.env.E2E_WEB_PORT ?? 3199), api: Number(process.env.E2E_API_PORT ?? 4199), rpc: Number(process.env.E2E_RPC_PORT ?? 8599) };
 const stateDir = path.join(ROOT, '.data', 'e2e');
+// Consumer demo config for the fixture web server (written by the consumer E2E; never reused across runs).
+const consumerConfig = path.join(stateDir, 'consumer.json');
 mkdirSync(stateDir, { recursive: true });
+rmSync(consumerConfig, { force: true });
 const children: ChildProcess[] = [];
 let pgServer: EmbeddedPostgres | null = null;
 let pgDir = '';
@@ -147,12 +150,12 @@ try {
   };
   run('api', ['--filter', '@palletdock/api', 'start'], { ...common, API_HOST: '127.0.0.1', API_PORT: String(PORTS.api), WEB_ORIGIN: `http://127.0.0.1:${PORTS.web}` });
   run('worker', ['--filter', '@palletdock/worker', 'start'], common);
-  run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e' });
+  run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e', PALLETDOCK_CONSUMER_CONFIG: consumerConfig });
   await waitFor('api', async () => (await fetch(`http://127.0.0.1:${PORTS.api}/health`)).ok);
   await waitFor('web', async () => (await fetch(`http://127.0.0.1:${PORTS.web}/login`)).ok, 240_000);
   log('api and web ready');
 
-  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, email, password, accounts, fixture: true };
+  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, email, password, accounts, consumerConfig, fixture: true };
   writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2));
   log(`ready: ${state.webUrl} (state in .data/e2e/state.json)`);
   // Keep running until SIGINT/SIGTERM (Playwright global teardown or Ctrl+C).

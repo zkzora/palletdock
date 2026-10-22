@@ -30,7 +30,7 @@ Unknown query parameters return 400. `limit` defaults to 25, max 100.
     "chainLayer": "evm",
     "observedAt": "2026-…Z",
     "checkpoint": { "sourceId": "…", "blockNumber": "…", "blockHash": "0x…", "committedAt": "…" },
-    "coverage": [ { "sourceId": "…", "requested": { "fromBlock": "…", "toBlock": null }, "completed": { … }, "status": "following", "lagBlocks": "0" } ],
+    "coverage": [ { "sourceId": "…", "requested": { "fromBlock": "…", "toBlock": null }, "completed": { … }, "status": "following", "lagBlocks": "0", "reorgEpoch": "0" } ],
     "finalityPolicy": "included-with-explicit-finality",
     "finality": "unknown"
   }
@@ -39,13 +39,26 @@ Unknown query parameters return 400. `limit` defaults to 25, max 100.
 
 Exact integers (blocks, values, gas, fees) are decimal strings. `nextCursor: null` means no further page in this snapshot.
 
+Transactions also carry `trackingStatus` (`active`, `settled`, `history_pruned`, `gave_up`), the receipt-tracking condition. It is separate from submission, inclusion, execution, finality, and indexing: `history_pruned` means the RPC node no longer serves that receipt or block and the last observed inclusion is kept (not a failure or a reorganization); `settled` means checks stopped at the confirmation depth, and finality is still unknown.
+
+## Freshness
+
+`meta.coverage[].lagBlocks` is computed from the worker's last observation and stops changing when the worker stops. Judge freshness by `latestObservedAt` and `completed.committedAt` (also in `/v1/.../indexer` with `status`, `desiredState`, `lastError`, and `reorgEpoch`).
+
+## Coverage belongs to the snapshot, liveness may be newer
+
+An events page reads its `meta` (coverage, fingerprint, reorg epochs), the snapshot bound, and its rows in one read-only `REPEATABLE READ` transaction, so `meta.coverage[].completed.toBlock` is the range those rows were read against. The first page's `meta` describes the snapshot that later pages continue. Claim "no event up to block N" only from that coverage.
+
+Each request is its own database snapshot. A `/v1/.../indexer` call made after the events can already report a newer checkpoint (the worker committed in between). Use it for liveness (status, errors, last observation), not to extend the events snapshot's coverage; the next events read includes the newer blocks. If `networkFingerprint.id` or a source's `reorgEpoch` differs between the events `meta.coverage` and `/indexer`, the two answers belong to different data generations (network change or rollback): read both again rather than combining them.
+
 ## Errors
 
 `{ "error": { "code", "message", "requestId" } }` with 400 `INVALID_QUERY`, 401 `UNAUTHORIZED`, 403 `FORBIDDEN_SCOPE`, 404 `PROJECT_NOT_FOUND`, 409 `CURSOR_RESTART_REQUIRED`, 429 `RATE_LIMITED`, 5xx. Messages never include secrets or another owner's data.
 
-## Consumer example
+## Consumer examples
 
-[`examples/read-events.mjs`](../examples/read-events.mjs) pages through events and restarts on `CURSOR_RESTART_REQUIRED`:
+- [CONSUMER.md](CONSUMER.md): the `/consumer` demo page (latest value, event identity, coverage, freshness, finality, tracking condition; read key kept server-side).
+- [`examples/read-events.mjs`](../examples/read-events.mjs) reads one consistent snapshot: it discards it and restarts on `CURSOR_RESTART_REQUIRED`, keys events by identity, and prints coverage. The dev stack in this repository serves the API on 4101:
 
 ```bash
 PALLETDOCK_API_URL=http://127.0.0.1:4100 PALLETDOCK_PROJECT_ID=<uuid> PALLETDOCK_READ_KEY=<key> node examples/read-events.mjs NumberChanged

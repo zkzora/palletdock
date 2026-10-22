@@ -1,6 +1,11 @@
 # PalletDock
 
-PalletDock is a self-hosted developer workspace for **Portaldot V3 Testnet** (EVM layer). One project keeps a contract's artifacts, wallet-signed deployments and writes, tracked receipts, indexed events, a scoped read API, and monitoring together, and always shows the network, block, and freshness context behind each value.
+PalletDock is a transaction-to-app reliability kit for Solidity builders on **Portaldot V3 Testnet** (EVM layer), self-hosted.
+
+- **Problem.** An app built on a contract needs the outcome of each transaction and the events behind its state, with an honest answer to "how complete and how current is this?". On this network the RPC node keeps only ~258 blocks of state, the chain tip reorganizes, RPCs fail, and finality is not exposed to EVM clients.
+- **Mechanism.** Wallet-signed deploys and writes; a receipt tracker that records submission, inclusion, execution, finality (unknown), indexing, and receipt-tracking condition as separate facts; a worker-run indexer with checkpoints, reorg rollback, and bounded backoff; a scoped read API whose responses carry network identity, checkpoint, coverage, and finality; and a [consumer demo](docs/CONSUMER.md) that shows how an app should read it.
+- **Evidence.** Live runs on Portaldot V3 Testnet with hashes, blocks, and screenshots in [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md) and [docs/evidence/](docs/evidence/); automated tests on a local fixture chain are labelled as such.
+- **Limits.** Values are what the indexer recorded from one RPC node; not a cryptographic proof, finality not verified, pruned history cannot always be re-read, no exactly-once guarantee for downstream effects. Not audited, not production-ready.
 
 > Status: self-hosted testnet MVP. **Live on Portaldot V3 Testnet (2026-10-21):** PalletDockStorage deployed at [`0xdd982913cb04f9e438437e2137ba1452e4b211ed`](docs/TESTNET_EVIDENCE.md#live-acceptance-run-2026-10-21) (tx `0x25f03a78…f30f`, block 133019), `store(42)` executed (tx `0x14ee38e9…fa47`, block 133023), its `NumberChanged` event indexed with block hash, tx hash, and log index matching the receipt, and served by the read API (`req_928DQZqiuWqf`, finality reported as unknown); a simulated RPC interruption failed safely and recovered without duplicates, a worker restart with `store(43)` sent while it was down produced exactly one new record, and 20 real tip reorganizations were rolled back without orphaned records. Screenshots and raw results: [docs/evidence/2026-10-21-live](docs/evidence/2026-10-21-live/). Network identity, account mapping, funding, and the EVM unit policy are recorded in the same file. Not audited, not production-ready. PalletDock is independent tooling, not an official Portaldot product.
 
@@ -12,9 +17,10 @@ PalletDock is a self-hosted developer workspace for **Portaldot V3 Testnet** (EV
 | Network | Allowlisted RPCs only; identity fingerprint (native genesis + EVM chain ID + runtime) pinned by the worker; reset requires an explicit migration |
 | Accounts | EVM wallet signing in the browser (EIP-1193); EVM → native mapping via runtime `reviveApi.accountId` with block/runtime provenance |
 | Contracts | Artifact upload validation; bundled reproducible Storage / ERC-20 / ERC-721 samples; deploy wizard; import with runtime-code check; ABI versions; ABI-driven read and write with fee + storage-deposit dry-run review; custom error decoding |
-| Transactions | Submission, inclusion, execution, finality, indexing tracked separately; wallet rejection, wrong network, unknown/timeout, revert, and receipt-disappeared states; hash registration; reconcile |
+| Transactions | Submission, inclusion, execution, finality, indexing, and receipt-tracking condition tracked separately; wallet rejection, wrong network, unknown/timeout, revert, reorg (different canonical hash), and pruned-history states; bounded backoff with terminal tracking states; hash registration; reconcile |
 | Indexer | Separate worker; leased, generation-fenced commits; adaptive `eth_getLogs`; backoff with jitter; header ancestry checks; reorg rollback and reindex; recovery-required state; raw + decoded logs |
 | Read API | `GET /v1/projects/{id}/{contracts,transactions,events,indexer}`; hashed, scoped, expiring, revocable, replaceable keys; signed snapshot cursors; OpenAPI at `/openapi.yaml` |
+| Consumer demo | `/consumer`: an app-side reader of the public API (latest value, event identity, coverage, freshness, finality, receipt-tracking condition) with the read key kept server-side; see [docs/CONSUMER.md](docs/CONSUMER.md) |
 | Monitoring | Probes (responded / failed / stale / unavailable), worker heartbeat, lag, API errors from recorded requests, filtered and paginated logs |
 
 Out of scope (not built): native signing and native event indexing, Assets/Uniques/Nfts, ink!, bridges, finality proofs, tracing, source verification, team roles, billing.
@@ -57,6 +63,8 @@ powershell -File scripts/dev-services.ps1 start|stop|restart|status
 
 Docker: `docker compose --profile app up -d`, then `docker compose run --rm owner --email you@example.com`. The image build and a compose boot (migrate, API health, web `/login`, worker) are checked in CI ([IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)).
 
+Hosted demo: use Vercel for the web app and Railway for the API, always-on worker, and private PostgreSQL. The exact service settings, environment variables, owner bootstrap, public read-only jury demo, and acceptance checks are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Tests
 
 ```bash
@@ -75,6 +83,7 @@ The fixture stack uses a local Hardhat chain with Portaldot's chain ID and label
 - [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md) – human steps for the live testnet acceptance run
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – processes, data model, indexer algorithm, security
 - [docs/API.md](docs/API.md) and [docs/openapi.yaml](docs/openapi.yaml) – read API
+- [docs/CONSUMER.md](docs/CONSUMER.md) – consumer demo: how an app reads the API, demo walkthrough, security model
 - [docs/NETWORK.md](docs/NETWORK.md) – identity verification, units, mapping, reset migration
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md), [docs/LIMITATIONS.md](docs/LIMITATIONS.md)
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [docs/HANDOFF.md](docs/HANDOFF.md), [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md)

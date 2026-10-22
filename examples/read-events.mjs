@@ -1,12 +1,16 @@
-// Minimal PalletDock API consumer: pages through indexed events for a project.
+// Minimal PalletDock API consumer: reads one consistent snapshot of indexed events for a project.
 //
 //   PALLETDOCK_API_URL=http://127.0.0.1:4100 \
 //   PALLETDOCK_PROJECT_ID=<uuid> \
 //   PALLETDOCK_READ_KEY=<pd_live_...>   # from the API page; never commit it
 //   node examples/read-events.mjs [EventName]
 //
-// Handles pagination with nextCursor and restarts from the first page when the
-// API reports CURSOR_RESTART_REQUIRED (indexed data was rolled back/reindexed).
+// Pages with nextCursor. When the API reports CURSOR_RESTART_REQUIRED (rollback,
+// reindex, or network change) it discards everything read so far and starts again
+// from the first page; nothing is printed until the snapshot is complete. Events
+// are keyed by identity (network fingerprint, chain ID, block hash, transaction
+// hash, log index), so a repeated row is printed once. The web app's consumer demo
+// (/consumer, apps/web/lib/consumer) does the same and adds freshness checks.
 const base = (process.env.PALLETDOCK_API_URL ?? 'http://127.0.0.1:4100').replace(/\/$/, '');
 const projectId = process.env.PALLETDOCK_PROJECT_ID;
 const key = process.env.PALLETDOCK_READ_KEY;
@@ -31,32 +35,51 @@ async function page(cursor) {
   return body;
 }
 
-let cursor = null;
 let restarts = 0;
-let total = 0;
+let snapshot;
 for (;;) {
-  let body;
-  try {
-    body = await page(cursor);
-  } catch (e) {
-    if (e.code === 'CURSOR_RESTART_REQUIRED' && restarts < 3) {
-      console.error('Snapshot invalidated by a rollback or reindex; restarting from the first page.');
-      cursor = null;
-      total = 0;
-      restarts++;
-      continue;
+  // One snapshot: discarded as a whole if the API invalidates it.
+  const events = new Map();
+  let meta = null;
+  let cursor = null;
+  let restart = false;
+  for (;;) {
+    let body;
+    try {
+      body = await page(cursor);
+    } catch (e) {
+      if (e.code === 'CURSOR_RESTART_REQUIRED' && restarts < 3) {
+        console.error('Snapshot invalidated by a rollback, reindex, or network change; discarding it and re-reading from the first page.');
+        restarts++;
+        restart = true;
+        break;
+      }
+      throw e;
     }
-    throw e;
+    meta ??= body.meta;
+    const fp = body.meta.networkFingerprint;
+    for (const e of body.data) {
+      const id = [fp?.id ?? 'unknown-network', fp?.evmChainId ?? '?', e.blockHash.toLowerCase(), e.transactionHash.toLowerCase(), e.logIndex].join('|');
+      if (!events.has(id)) events.set(id, e);
+    }
+    if (!body.nextCursor) break;
+    cursor = body.nextCursor;
   }
-  if (total === 0) {
-    const cp = body.meta.checkpoint;
-    console.error(`network ${body.meta.networkId} · checkpoint ${cp ? cp.blockNumber : 'none'} · finality ${body.meta.finality} · observed ${body.meta.observedAt}`);
-  }
-  for (const e of body.data) {
-    total++;
-    console.log(JSON.stringify({ block: e.blockNumber, tx: e.transactionHash, log: e.logIndex, event: e.event?.name ?? e.decodeStatus, args: e.event?.args ?? null }));
-  }
-  if (!body.nextCursor) break;
-  cursor = body.nextCursor;
+  if (restart) continue;
+  snapshot = { meta, events: [...events.values()] };
+  break;
 }
-console.error(`${total} event(s). Absence outside the completed coverage in meta.coverage is not evidence that an event did not happen.`);
+
+const { meta, events } = snapshot;
+const fp = meta.networkFingerprint;
+console.error(`network ${meta.networkId} · chain ${fp?.evmChainId ?? 'unknown'} · genesis ${fp?.genesisHash ?? 'unknown'} · finality ${meta.finality} · observed ${meta.observedAt}`);
+if (!fp) console.error('No verified network fingerprint reported: treat these results as unverified.');
+if (!meta.coverage?.length) console.error('No indexer coverage reported: an empty result here says nothing about whether events happened.');
+for (const c of meta.coverage ?? []) {
+  const done = c.completed ? `blocks ${c.completed.fromBlock}-${c.completed.toBlock} (checkpoint ${c.completed.committedAt})` : 'nothing completed yet';
+  console.error(`coverage ${c.contractAddress ?? c.sourceId}: ${done} · status ${c.status} · last observed ${c.latestObservedAt ?? 'never'}`);
+}
+for (const e of events) {
+  console.log(JSON.stringify({ block: e.blockNumber, blockHash: e.blockHash, tx: e.transactionHash, log: e.logIndex, event: e.event?.name ?? e.decodeStatus, args: e.event?.args ?? null, finality: e.finality }));
+}
+console.error(`${events.length} event(s), ${restarts} snapshot restart(s). Absence outside the completed coverage above is not evidence that an event did not happen.`);

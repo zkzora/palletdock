@@ -5,6 +5,8 @@ import { EvmAdapter, RpcResponseError, type RpcCaller } from '@palletdock/chain'
 import { PORTALDOT_V3_TESTNET } from '@palletdock/shared';
 import { createTestDatabase, seedWorkspace, type TestDatabase } from '../../../test-support/db.js';
 import { buildServer } from '../src/server.js';
+// The consumer demo's framework-free core, exercised against the real /v1 routes.
+import { EMPTY_STATE, deriveView, readSnapshot, reconcile, type FetchLike } from '../../web/lib/consumer/core.js';
 
 const ADDR = '0x5fb2e1c4a0d93b7e8c61f4a2b9d07e35c8a1f402';
 const EMPTY = '0x1111111111111111111111111111111111111111';
@@ -231,6 +233,47 @@ describe('contracts', () => {
     await db.pool.query(`UPDATE indexer_sources SET desired_state='deleted', status='stopped' WHERE id=$1`, [ok.json().data.id]);
   });
 
+  it('preflights reindex before changing checkpoints or canonical records', async () => {
+    const created = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources`, { contractId, events: ['NumberChanged'], startBlock: '60' });
+    expect(created.statusCode).toBe(201);
+    const sourceId = created.json().data.id as string;
+    const checkpointHash = '0x' + '6'.repeat(64);
+    const transactionHash = '0x' + '7'.repeat(64);
+
+    await db.pool.query(`UPDATE indexer_sources SET start_block=12, status='recovery_required', reorg_epoch=5, last_error='Historical state unavailable' WHERE id=$1`, [sourceId]);
+    await db.pool.query(`INSERT INTO indexer_checkpoints(source_id,block_number,block_hash) VALUES ($1,60,$2)`, [sourceId, checkpointHash]);
+    await db.pool.query(
+      `INSERT INTO raw_logs(source_id,project_id,fingerprint_id,contract_address,block_number,block_hash,transaction_hash,transaction_index,log_index,topics,data)
+       VALUES ($1,$2,$3,$4,60,$5,$6,0,0,'{}','0x')`,
+      [sourceId, A.projectId, A.fingerprintId, ADDR, checkpointHash, transactionHash],
+    );
+
+    const refused = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources/${sourceId}/reindex`);
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.message).toMatch(/Nothing was changed.*Edit the source configuration/);
+    expect((await db.pool.query(`SELECT status,reorg_epoch::text,generation::text,last_error FROM indexer_sources WHERE id=$1`, [sourceId])).rows[0]).toMatchObject({
+      status: 'recovery_required',
+      reorg_epoch: '5',
+      generation: '1',
+      last_error: 'Historical state unavailable',
+    });
+    expect((await db.pool.query(`SELECT block_number::text,block_hash FROM indexer_checkpoints WHERE source_id=$1`, [sourceId])).rows[0]).toEqual({ block_number: '60', block_hash: checkpointHash });
+    expect((await db.pool.query(`SELECT canonical FROM raw_logs WHERE source_id=$1`, [sourceId])).rows[0].canonical).toBe(true);
+
+    await db.pool.query(`UPDATE indexer_sources SET start_block=60 WHERE id=$1`, [sourceId]);
+    const accepted = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/indexer/sources/${sourceId}/reindex`);
+    expect(accepted.statusCode).toBe(200);
+    expect((await db.pool.query(`SELECT status,reorg_epoch::text,generation::text,last_error FROM indexer_sources WHERE id=$1`, [sourceId])).rows[0]).toMatchObject({
+      status: 'pending',
+      reorg_epoch: '6',
+      generation: '2',
+      last_error: null,
+    });
+    expect((await db.pool.query(`SELECT count(*)::int AS count FROM indexer_checkpoints WHERE source_id=$1`, [sourceId])).rows[0].count).toBe(0);
+    expect((await db.pool.query(`SELECT canonical FROM raw_logs WHERE source_id=$1`, [sourceId])).rows[0].canonical).toBe(false);
+    await db.pool.query(`UPDATE indexer_sources SET desired_state='deleted', status='stopped' WHERE id=$1`, [sourceId]);
+  });
+
   it('tells the UI whether an indexer covers a transaction’s contract before its receipt is recorded', async () => {
     const txId = (await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/contracts/${contractId}/prepare-write`, { function: 'store', args: ['5'], from: FROM })).json().data.transactionId;
     const configured = async () => (await ws(sessionA, 'GET', `/workspace/projects/${A.projectId}/transactions/${txId}`)).json().data.indexerConfigured;
@@ -320,6 +363,102 @@ describe('read API keys and v1 routes', () => {
     const p3 = await app.inject({ url: `/v1/projects/${A.projectId}/events?limit=2&cursor=${p2.nextCursor}`, headers: bearer });
     expect(p3.statusCode).toBe(409);
     expect(p3.json().error.code).toBe('CURSOR_RESTART_REQUIRED');
+  });
+
+  it('the consumer demo core reads the real /v1 API, restarts on CURSOR_RESTART_REQUIRED, and shows each event once', async () => {
+    const k = (await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/keys`, { name: 'consumer', scopes: ['events:read', 'indexer:read', 'transactions:read'], expiresInDays: 7 })).json();
+    let rollBackAfterFirstPage = true;
+    const viaApi: FetchLike = async (url, init) => {
+      const u = new URL(url);
+      const r = await app.inject({ url: u.pathname + u.search, headers: init.headers });
+      if (rollBackAfterFirstPage && u.pathname.endsWith('/events') && !u.searchParams.get('cursor')) {
+        // A rollback lands between page 1 and page 2 of this read.
+        rollBackAfterFirstPage = false;
+        await db.pool.query(`UPDATE indexer_sources SET reorg_epoch=reorg_epoch+1 WHERE project_id=$1`, [A.projectId]);
+      }
+      return { status: r.statusCode, json: async () => r.json() };
+    };
+    const read = (readKey: string) => readSnapshot({ apiUrl: 'http://palletdock.test', projectId: A.projectId, readKey, fetch: viaApi, pageLimit: 2 });
+    const s = await read(k.secret);
+    expect(s.restarts).toBe(1);
+    expect(s.events.map((e) => e.blockNumber)).toEqual(['60', '70', '80', '90', '100']);
+    expect(s.duplicatesDropped).toBe(0);
+    expect(s.meta?.networkFingerprint?.id).toBe(A.fingerprintId);
+    expect(s.sources?.length).toBeGreaterThan(0);
+    const view = deriveView(reconcile(EMPTY_STATE, { ok: true, snapshot: s }), Date.now());
+    expect(view.level).not.toBe('fresh'); // paused source without a checkpoint: not a healthy view
+    expect(view.finality).toMatch(/^Unknown/);
+    await expect(read('pd_live_nope.nope')).rejects.toMatchObject({ code: 'UNAUTHORIZED', status: 401 });
+  });
+
+  it('the consumer claims absence only for the coverage of the events snapshot it read, not a newer /indexer checkpoint', async () => {
+    const D = await seedWorkspace(db.pool, { email: 'd@example.test', projectName: 'Delta' });
+    const sessionD = await login('d@example.test');
+    expect((await ws(sessionD, 'POST', `/workspace/projects/${D.projectId}/contracts/import`, { name: 'Storage', address: ADDR, abi: ABI })).statusCode).toBe(201);
+    const c = (await db.pool.query(`SELECT id FROM contracts WHERE project_id=$1`, [D.projectId])).rows[0];
+    const av = (await db.pool.query(`SELECT id FROM abi_versions WHERE contract_id=$1`, [c.id])).rows[0];
+    const src = (
+      await db.pool.query(
+        `INSERT INTO indexer_sources(project_id,contract_id,fingerprint_id,abi_version_id,contract_address,event_names,event_topics,start_block,desired_state,status,latest_observed_block,latest_observed_at)
+         VALUES ($1,$2,$3,$4,$5,'{NumberChanged}','{0x00}',90,'running','following',100,now()) RETURNING id`,
+        [D.projectId, c.id, D.fingerprintId, av.id, ADDR],
+      )
+    ).rows[0].id;
+    await db.pool.query(`INSERT INTO indexer_checkpoints(source_id,block_number,block_hash) VALUES ($1,100,$2)`, [src, '0x' + 'a'.repeat(64)]);
+    const k = (await ws(sessionD, 'POST', `/workspace/projects/${D.projectId}/keys`, { name: 'consumer', scopes: ['events:read', 'indexer:read', 'transactions:read'], expiresInDays: 7 })).json();
+
+    // Between /events and /indexer of the first read, the worker indexes an event at 101 and commits checkpoint 101.
+    let between: (() => Promise<unknown>) | null = async () => {
+      await db.pool.query(
+        `INSERT INTO raw_logs(source_id,project_id,fingerprint_id,contract_address,block_number,block_hash,transaction_hash,transaction_index,log_index,topics,data)
+         VALUES ($1,$2,$3,$4,101,$5,$6,0,0,'{}','0x')`,
+        [src, D.projectId, D.fingerprintId, ADDR, '0x' + 'b'.repeat(64), '0x' + 'c'.repeat(64)],
+      );
+      await db.pool.query(`UPDATE indexer_checkpoints SET block_number=101, block_hash=$2, committed_at=now() WHERE source_id=$1`, [src, '0x' + 'b'.repeat(64)]);
+      await db.pool.query(`UPDATE indexer_sources SET latest_observed_block=101, latest_observed_at=now() WHERE id=$1`, [src]);
+    };
+    let eventsCalls = 0;
+    const viaApi: FetchLike = async (url, init) => {
+      const u = new URL(url);
+      const r = await app.inject({ url: u.pathname + u.search, headers: init.headers });
+      if (u.pathname.endsWith('/events')) {
+        eventsCalls++;
+        const run = between;
+        between = null;
+        await run?.();
+      }
+      return { status: r.statusCode, json: async () => r.json() };
+    };
+    const read = () => readSnapshot({ apiUrl: 'http://palletdock.test', projectId: D.projectId, readKey: k.secret, fetch: viaApi });
+
+    const first = await read();
+    expect(first.events).toEqual([]);
+    expect(first.meta?.coverage[0]).toMatchObject({ sourceId: src, completed: { fromBlock: '90', toBlock: '100' }, reorgEpoch: '0' });
+    expect(first.sources?.[0].checkpoint?.blockNumber).toBe('101'); // liveness is already newer
+    let state = reconcile(EMPTY_STATE, { ok: true, snapshot: first });
+    let view = deriveView(state, Date.now());
+    expect(view.coverage?.toBlock).toBe('100');
+    expect(view.emptyMessage).toMatch(/No matching event in blocks 90–100\b/);
+    expect(view.emptyMessage).not.toMatch(/101/);
+    expect(view.level).not.toBe('fresh');
+    expect(view.reasons.join(' ')).toMatch(/advanced to block 101 since this snapshot, which covers up to 100/);
+
+    state = reconcile(state, { ok: true, snapshot: await read() });
+    view = deriveView(state, Date.now());
+    expect(state.events.map((e) => e.blockNumber)).toEqual(['101']);
+    expect(view.coverage?.toBlock).toBe('101');
+    expect(view.level).toBe('fresh');
+
+    // A rollback between /events and /indexer: the read is repeated as a whole, not stitched across generations.
+    between = () => db.pool.query(`UPDATE indexer_sources SET reorg_epoch=reorg_epoch+1 WHERE id=$1`, [src]);
+    const callsBefore = eventsCalls;
+    const third = await read();
+    expect(third.generationRestarts).toBe(1);
+    expect(eventsCalls - callsBefore).toBe(2);
+    expect(third.meta?.coverage[0].reorgEpoch).toBe('1');
+    state = reconcile(state, { ok: true, snapshot: third });
+    expect(state.events.map((e) => e.blockNumber)).toEqual(['101']); // once, no duplicate
+    expect(state.notes.map((n) => n.text).join(' ')).toMatch(/generation changed between requests/);
   });
 
   it('rejects revoked and expired keys and records requests without secrets', async () => {

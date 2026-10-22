@@ -1,0 +1,77 @@
+[
+  {
+    "at": "2026-10-21T18:05:24.609Z",
+    "step": "A: normal (live data)",
+    "level": "fresh",
+    "value": "43",
+    "reasons": [],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ]
+  },
+  {
+    "at": "2026-10-21T18:05:25.861Z",
+    "step": "worker stopped"
+  },
+  {
+    "at": "2026-10-21T18:06:52.779Z",
+    "step": "C: worker stopped",
+    "level": "stale",
+    "value": "43",
+    "reasons": [
+      "The indexer has not observed the chain for 2 min (checkpoint at block 134972). The worker may be stopped or behind; the reported lag (0 blocks) dates from that last observation."
+    ],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ]
+  },
+  {
+    "at": "2026-10-21T18:06:53.356Z",
+    "step": "worker started"
+  },
+  {
+    "at": "2026-10-21T18:07:06.350Z",
+    "step": "D: worker back",
+    "level": "fresh",
+    "value": "43",
+    "reasons": [],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ]
+  },
+  {
+    "at": "2026-10-21T18:07:07.398Z",
+    "step": "api stopped"
+  },
+  {
+    "at": "2026-10-21T18:07:10.148Z",
+    "step": "API unavailable",
+    "level": "unavailable",
+    "value": "43",
+    "reasons": [
+      "API unavailable since 2026-10-21T18:07:07.449Z (API_UNAVAILABLE). Showing data last read at 2026-10-21T18:07:03.609Z; it may be out of date."
+    ],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ]
+  },
+  {
+    "at": "2026-10-21T18:07:10.619Z",
+    "step": "api started"
+  },
+  {
+    "at": "2026-10-21T18:07:18.577Z",
+    "step": "API back",
+    "level": "fresh",
+    "value": "43",
+    "reasons": [],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ]
+  }
+]

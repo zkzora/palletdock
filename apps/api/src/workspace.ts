@@ -115,6 +115,38 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     return fp;
   }
 
+  async function startBlockAvailabilityError(start: bigint): Promise<{ code: 'INVALID_REQUEST' | 'SERVICE_UNAVAILABLE'; message: string } | null> {
+    try {
+      const header = await evm.blockHeader(start);
+      if (header) return null;
+
+      let head = '';
+      try {
+        head = await evm.blockNumber();
+      } catch {
+        head = '';
+      }
+      return {
+        code: 'INVALID_REQUEST',
+        message: `Start block ${start} is not available from the RPC node${head ? `; head is ${head}` : ''}. Choose a recent start block that the node still retains.`,
+      };
+    } catch (e) {
+      if (e instanceof RpcResponseError && /state already discarded|unknownblock|pruned/i.test(e.message)) {
+        let head = '';
+        try {
+          head = await evm.blockNumber();
+        } catch {
+          head = '';
+        }
+        return {
+          code: 'INVALID_REQUEST',
+          message: `Start block ${start} is older than the RPC node retains (it discards state beyond roughly the last few hundred blocks${head ? `; head is ${head}` : ''}). Choose a recent start block, ideally the deployment block soon after deploying.`,
+        };
+      }
+      return { code: 'SERVICE_UNAVAILABLE', message: `The start block could not be checked: ${rpcErrorMessage(e)}` };
+    }
+  }
+
   async function contractOf(projectId: string, contractId: string) {
     if (!isUuid(contractId)) return null;
     const r = await pool.query(
@@ -865,24 +897,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     if (end !== null && end < start) return fail(reply, 'INVALID_REQUEST', 'End block must be at least the start block.');
     if (c.deploy_block && start < BigInt(c.deploy_block)) return fail(reply, 'INVALID_REQUEST', `Start block is before the recorded deployment block ${c.deploy_block}.`);
     // The indexer verifies block ancestry, so the start block must still be served by the node.
-    try {
-      await evm.blockHeader(start);
-    } catch (e) {
-      if (e instanceof RpcResponseError && /state already discarded|unknownblock|pruned/i.test(e.message)) {
-        let head = '';
-        try {
-          head = await evm.blockNumber();
-        } catch {
-          head = '';
-        }
-        return fail(
-          reply,
-          'INVALID_REQUEST',
-          `Start block ${start} is older than the RPC node retains (it discards state beyond roughly the last few hundred blocks${head ? `; head is ${head}` : ''}). Choose a recent start block, ideally the deployment block soon after deploying.`,
-        );
-      }
-      return fail(reply, 'SERVICE_UNAVAILABLE', `The start block could not be checked: ${rpcErrorMessage(e)}`);
-    }
+    const availabilityError = await startBlockAvailabilityError(start);
+    if (availabilityError) return fail(reply, availabilityError.code, availabilityError.message);
     const replaces = typeof body(request).replaceSourceId === 'string' ? String(body(request).replaceSourceId) : null;
     const id = await withTx(pool, async (tx) => {
       if (replaces) {
@@ -923,6 +939,16 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     const log = (c: pg.PoolClient, m: string, level = 'INFO') =>
       c.query(`INSERT INTO ops_logs(project_id,source,level,message,indexer_source_id) VALUES ($1,'indexer',$2,$3,$4)`, [g.project.id, level, m, sourceId]);
     if (action === 'simulate-failure' && !devControls) return fail(reply, 'FORBIDDEN_SCOPE', 'Simulated RPC failures are development controls and are disabled here.');
+    if (action === 'reindex') {
+      const availabilityError = await startBlockAvailabilityError(BigInt(s.start_block));
+      if (availabilityError) {
+        return fail(
+          reply,
+          availabilityError.code,
+          `${availabilityError.message} Nothing was changed. Edit the source configuration and choose a recent start block to create fresh coverage.`,
+        );
+      }
+    }
     await withTx(pool, async (c) => {
       switch (action) {
         case 'pause':

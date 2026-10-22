@@ -60,13 +60,13 @@ export default function LandingPage() {
           <div className="hero-glow" aria-hidden="true" />
           <div className="container hero-content" style={{ paddingBlock: '88px 72px', display: 'flex', flexDirection: 'column', gap: 28 }}>
             <div className="eyebrow enter" style={i(0)}>
-              Developer workspace for Portaldot
+              Transaction-to-app reliability for Portaldot V3
             </div>
             <h1 className="enter" style={{ ...i(1), margin: 0, maxWidth: 900, fontSize: 'clamp(38px,6vw,64px)', fontWeight: 600, letterSpacing: '-.03em', lineHeight: 1.04, textWrap: 'balance' }}>
               Deploy, index and monitor Portaldot contracts in one workspace.
             </h1>
             <p className="muted enter" style={{ ...i(2), margin: 0, maxWidth: 680, fontSize: 17, lineHeight: 1.6 }}>
-              Organize contracts by project, call them from Contract Studio, follow each transaction to its indexed event, query the results over an API, and watch RPC probes, on the Portaldot EVM layer.
+              Follow each transaction from your wallet to its receipt, its indexed event, and the API your app reads, with network identity, coverage, freshness, and finality stated, including when they are unknown.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Link href="/login" className="button arrow-link">

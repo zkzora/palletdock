@@ -1,0 +1,276 @@
+[
+  {
+    "at": "2026-10-21T22:44:41.504Z",
+    "step": "1: normal before the new event (live)",
+    "level": "fresh",
+    "value": "43",
+    "reasons": [],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 2,
+      "uniqueIdentities": 2,
+      "latestValue": "43",
+      "latestEvent": {
+        "block": "134261",
+        "blockHash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+        "tx": "0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137746",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T22:44:33.521Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137746"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T22:44:42.915Z",
+    "step": "worker stopped"
+  },
+  {
+    "at": "2026-10-21T22:46:14.369Z",
+    "step": "3: worker stopped",
+    "level": "stale",
+    "value": "43",
+    "reasons": [
+      "The indexer has not observed the chain for 2 min (checkpoint at block 137747). The worker may be stopped or behind; the reported lag (0 blocks) dates from that last observation."
+    ],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 2,
+      "uniqueIdentities": 2,
+      "latestValue": "43",
+      "latestEvent": {
+        "block": "134261",
+        "blockHash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+        "tx": "0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137747",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T22:44:41.553Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137747"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T22:46:14.369Z",
+    "step": "WAITING_FOR_TX",
+    "hint": "send store(n) from the wallet; once included, C:/PalletDock/live-kit/run-consumer-new-event/included.json is written with the tx hash",
+    "valueBefore": "43",
+    "eventsBefore": 2
+  },
+  {
+    "at": "2026-10-21T23:01:15.979Z",
+    "step": "warning",
+    "message": "Worker down for 15+ min; the node keeps ~258 blocks of state, catch-up may hit pruned history."
+  },
+  {
+    "at": "2026-10-21T23:08:21.777Z",
+    "step": "transaction confirmed included by the owner",
+    "txHash": "0x56913fdfb57364bcbf36ad2ad6e57e9eb0a27175ccdd791d27b5048e54b004cd",
+    "blockNumber": "137978",
+    "blockHash": "0xc4b34fb149a845825e70ccc47bea4d2e6676938f19ace801a97c4047eb84def9",
+    "expectValue": "44",
+    "confirmedBy": "owner (status success, 43 -> 44, 1 log)"
+  },
+  {
+    "at": "2026-10-21T23:08:24.502Z",
+    "step": "3b: tx included, worker still stopped (live)",
+    "level": "stale",
+    "value": "43",
+    "reasons": [
+      "The indexer has not observed the chain for 24 min (checkpoint at block 137747). The worker may be stopped or behind; the reported lag (0 blocks) dates from that last observation."
+    ],
+    "events": [
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 2,
+      "uniqueIdentities": 2,
+      "latestValue": "43",
+      "latestEvent": {
+        "block": "134261",
+        "blockHash": "0x701ec6b74c43a540a60c2d003dc65bce65bd3692684b852e33c6e664442a869b",
+        "tx": "0x15f4a518c302382e0e04df722eca03df157fcbb9411fdaa39af1ebe3c123ffc1",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137747",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T22:44:41.553Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137747"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T23:08:25.056Z",
+    "step": "worker started"
+  },
+  {
+    "at": "2026-10-21T23:09:18.366Z",
+    "step": "4: worker back",
+    "level": "fresh",
+    "value": "44",
+    "reasons": [],
+    "events": [
+      "#137978\n43 → 44\n0x56913fdf…b004cd · log 3",
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 3,
+      "uniqueIdentities": 3,
+      "latestValue": "44",
+      "latestEvent": {
+        "block": "137978",
+        "blockHash": "0xc4b34fb149a845825e70ccc47bea4d2e6676938f19ace801a97c4047eb84def9",
+        "tx": "0x56913fdfb57364bcbf36ad2ad6e57e9eb0a27175ccdd791d27b5048e54b004cd",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137993",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T23:09:15.265Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137993"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T23:09:21.451Z",
+    "step": "4b: after reload",
+    "level": "fresh",
+    "value": "44",
+    "reasons": [],
+    "events": [
+      "#137978\n43 → 44\n0x56913fdf…b004cd · log 3",
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 3,
+      "uniqueIdentities": 3,
+      "latestValue": "44",
+      "latestEvent": {
+        "block": "137978",
+        "blockHash": "0xc4b34fb149a845825e70ccc47bea4d2e6676938f19ace801a97c4047eb84def9",
+        "tx": "0x56913fdfb57364bcbf36ad2ad6e57e9eb0a27175ccdd791d27b5048e54b004cd",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137993",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T23:09:15.265Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137993"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T23:09:24.183Z",
+    "step": "4c: after another refresh",
+    "level": "fresh",
+    "value": "44",
+    "reasons": [],
+    "events": [
+      "#137978\n43 → 44\n0x56913fdf…b004cd · log 3",
+      "#134261\n42 → 43\n0x15f4a518…23ffc1 · log 3 · settled; finality unknown",
+      "#133023\n0 → 42\n0x14ee38e9…08fa47 · log 3 · node history pruned (inclusion kept from earlier observation)"
+    ],
+    "api": {
+      "ok": true,
+      "events": 3,
+      "uniqueIdentities": 3,
+      "latestValue": "44",
+      "latestEvent": {
+        "block": "137978",
+        "blockHash": "0xc4b34fb149a845825e70ccc47bea4d2e6676938f19ace801a97c4047eb84def9",
+        "tx": "0x56913fdfb57364bcbf36ad2ad6e57e9eb0a27175ccdd791d27b5048e54b004cd",
+        "logIndex": 3
+      },
+      "coverage": [
+        {
+          "completed": "133019-137994",
+          "reorgEpoch": "51",
+          "latestObservedAt": "2026-10-21T23:09:23.089Z"
+        }
+      ],
+      "indexerCheckpoint": [
+        "137994"
+      ],
+      "restarts": 0,
+      "generationRestarts": 0,
+      "duplicatesDropped": 0
+    }
+  },
+  {
+    "at": "2026-10-21T23:09:24.183Z",
+    "step": "summary",
+    "valueBefore": "43",
+    "eventsBefore": 2,
+    "valueAfter": "44",
+    "eventsAfter": [
+      3,
+      3,
+      3
+    ],
+    "uniqueAfter": [
+      3,
+      3,
+      3
+    ],
+    "rowsAfter": [
+      3,
+      3,
+      3
+    ]
+  }
+]
