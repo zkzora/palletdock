@@ -2,10 +2,10 @@
 
 PalletDock is a transaction-to-app reliability kit for Solidity builders on **Portaldot V3 Testnet** (EVM layer), self-hosted.
 
-- **Problem.** An app built on a contract needs the outcome of each transaction and the events behind its state, with an honest answer to "how complete and how current is this?". On this network the RPC node keeps only ~258 blocks of state, the chain tip reorganizes, RPCs fail, and finality is not exposed to EVM clients.
+- **Problem.** An app built on a contract needs the outcome of each transaction and the events behind its state, with an honest answer to "how complete and how current is this?". On the public Portaldot V3 RPC endpoint, block state was served for only the last 258 blocks (about 26 minutes) when [measured on 2026-10-17](docs/TESTNET_EVIDENCE.md#live-capabilities-2026-10-17-pnpm-networkcapabilities-read-only); the chain tip reorganizes and RPC calls fail. The node answers the `finalized` and `safe` block tags, but PalletDock does not independently verify EVM finality, so it reports finality as unknown.
 - **Mechanism.** Wallet-signed deploys and writes; a receipt tracker that records submission, inclusion, execution, finality (unknown), indexing, and receipt-tracking condition as separate facts; a worker-run indexer with checkpoints, reorg rollback, and bounded backoff; a scoped read API whose responses carry network identity, checkpoint, coverage, and finality; and a [consumer demo](docs/CONSUMER.md) that shows how an app should read it.
 - **Evidence.** Live runs on Portaldot V3 Testnet with hashes, blocks, and screenshots in [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md) and [docs/evidence/](docs/evidence/); automated tests on a local fixture chain are labelled as such.
-- **Limits.** Values are what the indexer recorded from one RPC node; not a cryptographic proof, finality not verified, pruned history cannot always be re-read, no exactly-once guarantee for downstream effects. Not audited, not production-ready.
+- **Limits.** Values are what the indexer recorded from one RPC node; not a cryptographic proof, finality not independently verified, pruned history cannot always be re-read, no exactly-once guarantee for downstream effects. Not audited, not production-ready.
 
 > Status: self-hosted testnet MVP. **Live on Portaldot V3 Testnet (2026-10-21):** PalletDockStorage deployed at [`0xdd982913cb04f9e438437e2137ba1452e4b211ed`](docs/TESTNET_EVIDENCE.md#live-acceptance-run-2026-10-21) (tx `0x25f03a78…f30f`, block 133019), `store(42)` executed (tx `0x14ee38e9…fa47`, block 133023), its `NumberChanged` event indexed with block hash, tx hash, and log index matching the receipt, and served by the read API (`req_928DQZqiuWqf`, finality reported as unknown); a simulated RPC interruption failed safely and recovered without duplicates, a worker restart with `store(43)` sent while it was down produced exactly one new record, and 20 real tip reorganizations were rolled back without orphaned records. Screenshots and raw results: [docs/evidence/2026-10-21-live](docs/evidence/2026-10-21-live/). Network identity, account mapping, funding, and the EVM unit policy are recorded in the same file. Not audited, not production-ready. PalletDock is independent tooling, not an official Portaldot product.
 
@@ -58,8 +58,10 @@ pnpm network:verify           # optional: one read-only identity probe
 Windows helper for long-running services (PIDs in `.data/*.pid`, logs in `.data/logs/`):
 
 ```powershell
-powershell -File scripts/dev-services.ps1 start|stop|restart|status
+powershell -File scripts/dev-services.ps1 start
 ```
+
+Replace `start` with `stop`, `restart`, or `status`. Add `-Only worker` (or `-Only api,web`) to act on some services only; the database is started separately with `pnpm db:start`.
 
 Docker: `docker compose --profile app up -d`, then `docker compose run --rm owner --email you@example.com`. The image build and a compose boot (migrate, API health, web `/login`, worker) are checked in CI ([IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)).
 

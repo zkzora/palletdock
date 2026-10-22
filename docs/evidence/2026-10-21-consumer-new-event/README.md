@@ -28,7 +28,7 @@ Transaction (owner, wallet): `store(44)` on `0xdd982913cb04f9e438437e2137ba1452e
 | 23:09:24 | 4c. Another refresh | *Up to date*, 44, 3 rows (`06-after-refresh.png`) | 3 events, 3 unique |
 
 The worker was down for about 24 min (checkpoint 137747, tip 137983 when it restarted:
-236 blocks, inside the node's ~258-block state window) and caught up with no errors in its
+236 blocks, inside the 258-block state window measured on this endpoint on 2026-10-17) and caught up with no errors in its
 log. Finality stayed *Unknown: not confirmed* throughout.
 
 Files: the screenshots above, `walkthrough.json` (step log with the API summary for each

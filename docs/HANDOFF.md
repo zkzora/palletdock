@@ -60,7 +60,7 @@ On Linux the fixture stack stops its children by process group; on Windows use `
 
 ## Next steps, in priority order
 
-1. **Optional MetaMask-approved run** of the same flow (the live runs used a scripted EIP-1193 signer). Configure any new indexer source within ~26 minutes of its start block (node retains ~258 blocks). Do not change the network or accept a reset without the owner's approval.
+1. **Optional MetaMask-approved run** of the same flow (the live runs used a scripted EIP-1193 signer). Configure any new indexer source within ~26 minutes of its start block (the public endpoint retained 258 blocks when measured on 2026-10-17). Do not change the network or accept a reset without the owner's approval.
 2. ~~Verify the EVM unit policy~~ Done 2026-10-19: `eth_getBalance` = (native free − existential deposit) × 10⁴ (TESTNET_EVIDENCE.md).
 3. Replacement-transaction linking by nonce.
 

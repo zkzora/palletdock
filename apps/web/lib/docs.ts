@@ -399,7 +399,7 @@ export const DOCS: Doc[] = [
       ['h', 'Checkpoints'],
       ['p', 'Both block height and block hash are persisted. Raw logs, decoded events, headers, the checkpoint, and status are written in one database transaction, and only while the worker still holds the lease and the source generation is unchanged. Empty ranges advance the checkpoint too. On restart or reconnect, work resumes from the stored checkpoint; duplicates are prevented by the record identity.'],
       ['p', 'Requested and completed coverage are tracked separately. `eth_getLogs` ranges shrink automatically when the node rejects them, and RPC failures back off exponentially (bounded) before retrying.'],
-      ['note', 'The Portaldot V3 RPC node keeps block state for only about 258 blocks (~26 minutes). Configure a source soon after deploying, with the deployment block as start block, and keep the worker running. A start block outside that window is rejected; a checkpoint that ages out while the worker is stopped puts the source in **Recovery required** instead of retrying forever.'],
+      ['note', 'When measured on 2026-10-17, the public Portaldot V3 RPC endpoint served block state for only the last 258 blocks (~26 minutes). That is an observation of the endpoint, not a documented network guarantee. Configure a source soon after deploying, with the deployment block as start block, and keep the worker running. A start block outside that window is rejected; a checkpoint that ages out while the worker is stopped puts the source in **Recovery required** instead of retrying forever.'],
       ['h', 'Reorganizations and finality'],
       ['p', 'An EVM receipt proves reported inclusion and execution status, not automatically native finality. Do not assume native and EVM block numbers are equal. A finalized native head must be linked to EVM records by a verified adapter before those records can be called finalized.'],
       ['p', 'No such adapter exists yet, so every record keeps **unknown** finality. An explicit included state is more truthful than fabricated finality. No GRANDPA finality-proof RPC is assumed.'],
@@ -565,8 +565,8 @@ export const DOCS: Doc[] = [
     blocks: [
       ['bullets', [
         'The deploy → write → index → API flow ran live on Portaldot V3 Testnet on 2026-10-21 (contract `0xdd982913cb04f9e438437e2137ba1452e4b211ed`). RPC-interruption recovery and a worker restart with a new event while stopped were verified live the same day.',
-        'The RPC node keeps block state for only ~258 blocks (~26 minutes); the indexer needs a recent start block and a running worker.',
-        'Finality is always unknown. No verified finality adapter exists.',
+        'The public RPC endpoint served block state for only the last 258 blocks (~26 minutes) when measured on 2026-10-17; the indexer needs a recent start block and a running worker.',
+        'Finality is always reported as unknown. The node answers the finalized and safe block tags, but PalletDock does not independently verify EVM finality.',
         'Storage-deposit estimates use the runtime dry run only when metadata exposes a compatible `reviveApi` call; otherwise they are unavailable with a reason. Deposits are not read from receipts.',
         'EVM denomination comes from runtime metadata on the verified fingerprint (`revive.nativeToEthRatio` 10000 → 18 decimals); PalletDock shows raw base units plus the exact tPOT amount only while that holds, and labels amounts unverified otherwise.',
         'Only EVM contract logs are indexed. Native events, native signing, Assets/Uniques/Nfts management, ink!, bridges, tracing, source verification, team roles, and billing are not implemented.',

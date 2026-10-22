@@ -39,7 +39,7 @@ Contract → **Write** → `store(uint256)` = `42` → Review write → Request 
 
 ## 4. Index
 
-> The Portaldot V3 RPC node keeps state for only ~258 blocks (about 26 minutes). Configure the indexer **soon after deploying** (start block = deployment block) and keep the worker running. A start block older than the window is rejected; a worker stopped for longer than the window puts the source in *Recovery required* (reindex from a recent block).
+> When measured on 2026-10-17, the public Portaldot V3 RPC endpoint kept state for only the last 258 blocks (about 26 minutes); treat it as an observation of that endpoint, not a fixed network property. Configure the indexer **soon after deploying** (start block = deployment block) and keep the worker running. A start block older than the window is rejected; a worker stopped for longer than the window puts the source in *Recovery required* (reindex from a recent block).
 
 
 Indexer → **Configure log source** → contract PalletDockStorage, event NumberChanged, start block = deployment block → Save. Wait until the record `NumberChanged … newValue=42` appears and coverage passes the write's block. Confirm the record's block hash, tx hash, and log index match the receipt's log.
