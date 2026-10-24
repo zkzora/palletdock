@@ -129,6 +129,7 @@ try {
   // 3. Owner + fixture fingerprint
   const email = 'e2e-owner@palletdock.test';
   const password = randomBytes(18).toString('base64url');
+  const signupInviteCode = randomBytes(18).toString('base64url');
   await pool.query('INSERT INTO owners(email,password_hash) VALUES ($1,$2)', [email, await hashPassword(password)]);
   await pool.query(
     `INSERT INTO network_fingerprints(network_id,status,genesis_hash,evm_chain_id,evm_genesis_hash,spec_name,spec_version,ss58_format,token_symbol,token_decimals,evidence)
@@ -148,7 +149,15 @@ try {
     PALLETDOCK_CURSOR_SECRET: randomBytes(32).toString('base64url'),
     API_RATE_LIMIT_PER_MINUTE: '2000',
   };
-  run('api', ['--filter', '@palletdock/api', 'start'], { ...common, API_HOST: '127.0.0.1', API_PORT: String(PORTS.api), WEB_ORIGIN: `http://127.0.0.1:${PORTS.web}` });
+  run('api', ['--filter', '@palletdock/api', 'start'], {
+    ...common,
+    API_HOST: '127.0.0.1',
+    API_PORT: String(PORTS.api),
+    WEB_ORIGIN: `http://127.0.0.1:${PORTS.web}`,
+    PALLETDOCK_SIGNUP_MODE: 'invite',
+    PALLETDOCK_SIGNUP_INVITE_CODE: signupInviteCode,
+    PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES: '20',
+  });
   // Hardhat mines a block only per transaction and serves its logs immediately, so no confirmation lag.
   run('worker', ['--filter', '@palletdock/worker', 'start'], { ...common, PALLETDOCK_INDEX_LAG_BLOCKS: '0' });
   run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e', PALLETDOCK_CONSUMER_CONFIG: consumerConfig });
@@ -156,7 +165,7 @@ try {
   await waitFor('web', async () => (await fetch(`http://127.0.0.1:${PORTS.web}/login`)).ok, 240_000);
   log('api and web ready');
 
-  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, email, password, accounts, consumerConfig, fixture: true };
+  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, email, password, signupInviteCode, accounts, consumerConfig, fixture: true };
   writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2));
   log(`ready: ${state.webUrl} (state in .data/e2e/state.json)`);
   // Keep running until SIGINT/SIGTERM (Playwright global teardown or Ctrl+C).

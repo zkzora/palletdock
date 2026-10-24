@@ -34,7 +34,7 @@ See the [testnet walkthrough](docs/WALKTHROUGH.md) for the detailed steps.
 
 | Workspace area | What you can do |
 | --- | --- |
-| Projects | Create and switch projects, export without secrets, archive, and restore under a single-owner session |
+| Projects | Create and switch projects, export without secrets, archive, and restore inside an owner-isolated workspace |
 | Contracts | Deploy or import contracts, manage ABI versions, call reads, and prepare wallet-signed writes with supported estimates and error decoding |
 | Transactions | Inspect inclusion, execution, indexing, finality, and tracking conditions, including pruned receipts and reorganized transactions |
 | Indexer | Configure EVM event sources, inspect raw and decoded logs, follow checkpoints, and see retry or recovery-required states |
@@ -113,7 +113,9 @@ pnpm db:migrate
 pnpm owner:create --email you@example.com
 ```
 
-The owner command prompts for a password of at least 12 characters. Running it again updates the single owner and revokes existing sessions.
+The owner command prompts for a password of at least 12 characters. Running it again for the same email resets only that account and revokes only its sessions.
+
+Self-service registration is disabled by default. Set `PALLETDOCK_SIGNUP_MODE=invite` with a server-side `PALLETDOCK_SIGNUP_INVITE_CODE` of at least 16 characters to let users create their own isolated accounts at `/signup`. `open` mode removes the code requirement, but should not be exposed without deployment-level CAPTCHA, quotas, and abuse monitoring.
 
 Start the API and worker in separate terminals:
 

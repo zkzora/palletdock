@@ -63,14 +63,24 @@ PALLETDOCK_PROCESS=worker
 
 The worker must remain running. It does not need a public domain.
 
-After the API is healthy, create the single owner without putting the password in an environment variable:
+After the API is healthy, create an operator account without putting the password in an environment variable:
 
 ```sh
 railway ssh --service api
 pnpm owner:create --email you@example.com
 ```
 
-Enter the password only at the interactive prompt. Creating the owner again resets the password and revokes existing sessions.
+Enter the password only at the interactive prompt. Running the command again for the same email resets that account and revokes only its sessions.
+
+For self-service hosted accounts, prefer invite mode on the API service:
+
+```text
+PALLETDOCK_SIGNUP_MODE=invite
+PALLETDOCK_SIGNUP_INVITE_CODE=<random value, at least 16 characters>
+PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES=5
+```
+
+Redeploy the API after changing these values. Users then create isolated accounts at `/signup`; the invite code is sent only to intended testers and is never configured in Vercel or a `NEXT_PUBLIC_*` variable. `PALLETDOCK_SIGNUP_MODE=open` is supported but is not recommended until the deployment also has CAPTCHA, resource quotas, and abuse monitoring. `disabled` remains the default.
 
 ## 3. Vercel
 

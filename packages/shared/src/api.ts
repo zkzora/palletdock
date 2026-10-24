@@ -20,11 +20,18 @@ export const ERROR_CODES = {
   CURSOR_RESTART_REQUIRED: 409,
   PAYLOAD_TOO_LARGE: 413,
   RATE_LIMITED: 429,
+  REGISTRATION_DISABLED: 403,
   NETWORK_IDENTITY_MISMATCH: 503,
   SERVICE_UNAVAILABLE: 503,
   INTERNAL: 500,
 } as const;
 export type ErrorCode = keyof typeof ERROR_CODES;
+
+export const signupSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(254, 'Email is too long.'),
+  password: z.string().min(12, 'Password must be at least 12 characters.').max(128, 'Password is limited to 128 characters.'),
+  inviteCode: z.string().max(256, 'Registration code is too long.').optional(),
+});
 
 export const projectCreateSchema = z.object({
   name: z.string().trim().min(1, 'Enter project name.').max(80, 'Project name is limited to 80 characters.'),

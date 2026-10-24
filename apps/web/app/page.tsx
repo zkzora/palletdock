@@ -13,7 +13,7 @@ import { SiteFooter } from '@/components/site-footer';
 const REPO_URL = process.env.NEXT_PUBLIC_PALLETDOCK_REPO_URL ?? 'https://github.com/zkzora/palletdock';
 
 const implemented = [
-  'Single-owner sign-in with hashed password, CSRF-protected sessions, rate-limited login',
+  'Owner-isolated accounts with guarded signup, hashed passwords, CSRF-protected sessions, and auth rate limits',
   'Projects: create, search, switch, edit, export (no secrets), archive and controlled restore',
   'EVM wallet signing in the browser; no server keys, no seed phrase input',
   'Runtime account mapping through reviveApi.accountId, with block and runtime provenance',

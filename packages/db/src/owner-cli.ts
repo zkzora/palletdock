@@ -1,8 +1,8 @@
 /**
- * Create or reset the single workspace owner.
+ * Create or reset one workspace account.
  *   pnpm owner:create --email you@example.com
- * The password comes from PALLETDOCK_OWNER_PASSWORD or an interactive prompt.
- * It is never written to logs.
+ * The password is accepted only through the interactive prompt and is never
+ * written to arguments, environment variables, or logs.
  */
 import { createInterface } from 'node:readline/promises';
 import { createPool, hashPassword, loadEnv } from './index.js';
@@ -15,19 +15,16 @@ if (!/^[^@\s]+@[^@\s]+$/.test(email)) {
   console.error('Usage: pnpm owner:create --email you@example.com');
   process.exit(1);
 }
-let password = process.env.PALLETDOCK_OWNER_PASSWORD ?? '';
-if (!password) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  password = await rl.question('Owner password (min 12 chars): ');
-  rl.close();
-}
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+const password = await rl.question('Owner password (min 12 chars): ');
+rl.close();
 const pool = createPool();
 try {
   const hash = await hashPassword(password);
-  const existing = await pool.query('SELECT id FROM owners LIMIT 1');
+  const existing = await pool.query('SELECT id FROM owners WHERE lower(email)=$1', [email]);
   if (existing.rowCount) {
     const r = await pool.query('UPDATE owners SET email=$1, password_hash=$2 WHERE id=$3 RETURNING id', [email, hash, existing.rows[0].id]);
-    await pool.query('UPDATE sessions SET revoked_at=now() WHERE revoked_at IS NULL');
+    await pool.query('UPDATE sessions SET revoked_at=now() WHERE owner_id=$1 AND revoked_at IS NULL', [existing.rows[0].id]);
     console.log(`Owner updated (${r.rows[0].id}). Existing sessions revoked.`);
   } else {
     const r = await pool.query('INSERT INTO owners(email, password_hash) VALUES ($1,$2) RETURNING id', [email, hash]);

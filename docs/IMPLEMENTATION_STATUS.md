@@ -34,7 +34,7 @@ Three separate questions per area:
 | Lossless quantities, EVM unit policy from runtime metadata (`revive.nativeToEthRatio` on the verified fingerprint) | ✓ | ✓ `quantity.test.ts`, `api.test.ts` (verified, missing metadata, inactive fingerprint) | ✓ ratio 10000 read live 2026-10-21 → 18 decimals; matches the 2026-10-19 balance check |
 | Artifact/ABI validation, argument coercion | ✓ | ✓ `abi.test.ts` | – |
 | Sample contracts, reproducible build | ✓ | ✓ CI artifact check; deploy on fixture chain | ✓ PalletDockStorage deployed 2026-10-21; runtime code identical to the compiled artifact |
-| Owner auth, sessions, CSRF, login limits | ✓ | ✓ `api.test.ts` | n/a |
+| Owner auth, guarded self-service signup, sessions, CSRF, login/signup limits | ✓ | ✓ `api.test.ts`, `server-config.test.ts` | n/a |
 | Projects, archive/restore, export | ✓ | ✓ API + fixture E2E | n/a |
 | Owner/project isolation | ✓ | ✓ every workspace route | n/a |
 | Contract import (code check), ABI versions, remove | ✓ | ✓ API + fixture E2E | ✗ |

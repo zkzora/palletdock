@@ -29,6 +29,7 @@ import {
 import { registerRequestLogging, registerV1 } from './v1.js';
 import { registerWorkspace, type WorkspaceDeps } from './workspace.js';
 import { listenOptions } from './listen.js';
+import { registerSignupRoutes } from './registration.js';
 import {
   SESSION_COOKIE,
   cursorSecret,
@@ -74,6 +75,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     return { status: 'ok', database: 'connected', observedAt: db.rows[0].now };
   });
 
+  registerSignupRoutes(app, pool, CURSOR_SECRET);
+
   app.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -85,7 +88,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
       [email, ipHash],
     );
     if (recent.rows[0].failures >= 10) return fail(reply, 'RATE_LIMITED', 'Too many failed sign-in attempts. Try again later.');
-    const owner = await pool.query('SELECT id, email, password_hash FROM owners WHERE email=$1', [email]);
+    const owner = await pool.query('SELECT id, email, password_hash FROM owners WHERE lower(email)=$1', [email]);
     const valid = owner.rows[0] ? await verifyPassword(password, owner.rows[0].password_hash) : false;
     await pool.query('INSERT INTO login_attempts(email,ip_hash,success) VALUES ($1,$2,$3)', [email, ipHash, valid]);
     if (!valid) return fail(reply, 'UNAUTHORIZED', 'Email or password is incorrect.');

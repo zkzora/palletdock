@@ -38,7 +38,7 @@ Events are ordered by `(block_number, transaction_index, log_index, seq)`. The f
 
 ## Security model
 
-- One owner; scrypt password hashes; login rate-limited per IP and per email; sessions are random tokens stored hashed, HttpOnly SameSite=Strict cookies, 7-day expiry; production start refuses non-secure cookies.
+- Owner-isolated accounts; optional disabled/invite/open self-service registration; normalized unique emails; scrypt password hashes; signup and login rate-limited per IP and per email; sessions are random tokens stored hashed, HttpOnly SameSite=Strict cookies, 7-day expiry; production start refuses non-secure cookies.
 - CSRF: per-session token required in `x-csrf-token` for every mutation.
 - Ownership: every workspace route resolves the project by `(id, owner_id)`; child objects are always looked up with `project_id`; malformed UUIDs return 404.
 - Read keys: `pd_live_<prefix>.<secret>`; only SHA-256 of the full key is stored; project-scoped; scopes per endpoint; expiry; revocation; replacement. Keys cannot authorize workspace routes.

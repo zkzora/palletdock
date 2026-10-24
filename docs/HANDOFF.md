@@ -43,7 +43,7 @@ The full MVP workflow is implemented, passes automated tests (including a browse
 
 - PostgreSQL `127.0.0.1:55432` (`pnpm db:start`, data in `.data/postgres`), API `127.0.0.1:4101`, web `127.0.0.1:3001`, worker. Managed with `scripts/dev-services.ps1`. `.env` (gitignored) holds a random cursor secret and `PALLETDOCK_DEV_CONTROLS=1`.
 - Ports 3000 and 4100 belong to an unrelated project (Collara). Do not stop them.
-- The dev owner `owner@palletdock.local` was created by an earlier session and its password was not stored. Run `pnpm owner:create --email <you>` to set a new one (this updates the single owner and revokes sessions).
+- The dev account `owner@palletdock.local` was created by an earlier session and its password was not stored. Run `pnpm owner:create --email <you>` to create or reset that exact email; only that account's sessions are revoked.
 
 ## In a fresh clone (cloud session)
 

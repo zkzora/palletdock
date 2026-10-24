@@ -73,6 +73,9 @@ const ws = (s: { cookie: string; csrf: string }, method: 'GET' | 'POST' | 'PATCH
 
 beforeAll(async () => {
   process.env.API_RATE_LIMIT_PER_MINUTE = '10000';
+  process.env.PALLETDOCK_SIGNUP_MODE = 'invite';
+  process.env.PALLETDOCK_SIGNUP_INVITE_CODE = 'test-registration-code-1234';
+  process.env.PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES = '50';
   db = await createTestDatabase();
   A = await seedWorkspace(db.pool, { email: 'a@example.test', projectName: 'Alpha' });
   B = await seedWorkspace(db.pool, { email: 'b@example.test', projectName: 'Beta' });
@@ -98,6 +101,71 @@ describe('session protections', () => {
     const r2 = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'nobody@example.test', password: 'wrong password!!' } });
     expect(r1.statusCode).toBe(401);
     expect(r1.json().error.message).toBe(r2.json().error.message);
+  });
+});
+
+describe('self-service signup', () => {
+  it('publishes only signup availability, not the invite secret', async () => {
+    const response = await app.inject({ method: 'GET', url: '/auth/signup-config' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ enabled: true, inviteRequired: true });
+    expect(response.body).not.toContain('test-registration-code');
+  });
+
+  it('rejects weak passwords and an incorrect invite code', async () => {
+    const weak = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: { email: 'new@example.test', password: 'too-short', inviteCode: 'test-registration-code-1234' },
+    });
+    expect(weak.statusCode).toBe(400);
+    expect(weak.json().error.code).toBe('INVALID_REQUEST');
+
+    const badInvite = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: { email: 'new@example.test', password: 'a secure demo password', inviteCode: 'incorrect-registration-code' },
+    });
+    expect(badInvite.statusCode).toBe(401);
+    expect((await db.pool.query(`SELECT count(1)::int AS n FROM owners WHERE email='new@example.test'`)).rows[0].n).toBe(0);
+  });
+
+  it('creates an isolated owner, hashes the password, and starts a session', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      headers: { 'user-agent': 'signup-test' },
+      payload: { email: ' NEW@Example.Test ', password: 'a secure demo password', inviteCode: 'test-registration-code-1234' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().owner.email).toBe('new@example.test');
+    expect(response.json().csrfToken).toMatch(/^[A-Za-z0-9_-]+$/);
+    const setCookie = String(response.headers['set-cookie']);
+    expect(setCookie).toContain('palletdock_session=');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=Strict');
+
+    const cookie = setCookie.split(';')[0];
+    const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().owner.email).toBe('new@example.test');
+    const projects = await app.inject({ method: 'GET', url: '/workspace/projects', headers: { cookie } });
+    expect(projects.json().data).toEqual([]);
+
+    const stored = (await db.pool.query(`SELECT password_hash FROM owners WHERE email='new@example.test'`)).rows[0].password_hash;
+    expect(stored).toMatch(/^scrypt\$/);
+    expect(stored).not.toContain('a secure demo password');
+  });
+
+  it('does not create a second account for a case-insensitive duplicate email', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: { email: 'New@Example.Test', password: 'another secure password', inviteCode: 'test-registration-code-1234' },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe('CONFLICT');
+    expect((await db.pool.query(`SELECT count(1)::int AS n FROM owners WHERE lower(email)='new@example.test'`)).rows[0].n).toBe(1);
   });
 });
 
