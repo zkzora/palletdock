@@ -440,7 +440,7 @@ describe('read API keys and v1 routes', () => {
     expect(view.coverage?.toBlock).toBe('100');
     expect(view.emptyMessage).toMatch(/No matching event in blocks 90–100\b/);
     expect(view.emptyMessage).not.toMatch(/101/);
-    expect(view.level).not.toBe('fresh');
+    expect(view.level).toBe('fresh'); // a one-block difference is noted (below), not treated as stale
     expect(view.reasons.join(' ')).toMatch(/advanced to block 101 since this snapshot, which covers up to 100/);
 
     state = reconcile(state, { ok: true, snapshot: await read() });

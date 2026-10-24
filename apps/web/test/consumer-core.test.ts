@@ -202,8 +202,13 @@ describe('snapshot coverage vs a newer indexer status (race between /events and 
     expect(view.coverage?.toBlock).toBe('100');
     expect(view.emptyMessage).toMatch(/No matching event in blocks 100–100\b/);
     expect(view.emptyMessage).not.toMatch(/101/);
-    expect(view.level).not.toBe('fresh');
+    // One block of difference is normal while the worker follows the head: noted, not a freshness problem.
+    expect(view.level).toBe('fresh');
     expect(view.reasons.join(' ')).toMatch(/advanced to block 101 since this snapshot.*covers up to 100/);
+    // Beyond the lag threshold the same situation is shown as behind.
+    const far = deriveView({ ...state, sources: [source({ checkpoint: { blockNumber: '111', blockHash: H(111), committedAt: iso(1_000) }, latestObservedBlock: '111', latestObservedAt: iso(1_000) })] }, NOW);
+    expect(far.level).toBe('lagging');
+    expect(far.emptyMessage).toContain('No matching event in blocks 100–100 (indexed)');
 
     // Next read: the snapshot now covers 101 and contains the event; it appears once.
     const second = fakeApi({

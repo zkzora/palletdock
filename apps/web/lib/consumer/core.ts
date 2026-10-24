@@ -532,8 +532,9 @@ export function deriveView(state: ConsumerState, now: number, o: ViewOptions = {
     }
     const covered = snapshotCoverage.find((c) => c.sourceId === s.id)?.completed?.toBlock ?? null;
     if (covered === null || BigInt(s.checkpoint.blockNumber) > BigInt(covered)) {
-      // Newer liveness, older snapshot: say so instead of stretching the snapshot's coverage.
-      level = worse(level, 'lagging');
+      // Newer liveness, older snapshot: say so instead of stretching the snapshot's coverage. While the
+      // worker follows the head a few blocks of difference are normal; only a larger gap means behind.
+      if (covered === null || BigInt(s.checkpoint.blockNumber) - BigInt(covered) > lagWarn) level = worse(level, 'lagging');
       reasons.push(`The indexer has advanced to block ${s.checkpoint.blockNumber} since this snapshot, which covers up to ${covered ?? 'no completed block'}; the next read will include it.`);
     }
   }
