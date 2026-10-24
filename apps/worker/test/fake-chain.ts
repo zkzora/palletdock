@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { hexToBytes, keccak256, toHex, type Hex } from 'viem';
 import { RpcResponseError, RpcTransportError, type RpcCaller } from '@palletdock/chain';
 
 export interface FakeLog {
@@ -18,6 +19,21 @@ interface Block {
 
 const h = (s: string) => '0x' + createHash('sha256').update(s).digest('hex');
 
+/** Ethereum 2048-bit logs bloom over each log's address and topics. */
+function bloomOf(logs: FakeLog[]): Hex {
+  const bloom = new Uint8Array(256);
+  for (const l of logs) {
+    for (const item of [l.address, ...l.topics]) {
+      const d = hexToBytes(keccak256(item as Hex));
+      for (const i of [0, 2, 4]) {
+        const bit = ((d[i] << 8) | d[i + 1]) & 2047;
+        bloom[255 - Math.floor(bit / 8)] |= 1 << bit % 8;
+      }
+    }
+  }
+  return toHex(bloom);
+}
+
 /**
  * Deterministic in-memory EVM JSON-RPC used for indexer tests. It is a test
  * fixture only and is never wired into the running worker.
@@ -30,6 +46,10 @@ export class FakeChain implements RpcCaller {
   calls: string[] = [];
   private failures: Array<() => Error> = [];
   onGetLogs?: (from: number, to: number) => Promise<void> | void;
+  /** Per block: how many more eth_getLogs calls omit its logs (a node whose log index lags its head). */
+  private hiddenLogs = new Map<number, number>();
+  /** Per block: bloom entries that have no matching log (a bloom false positive). */
+  bloomOnly = new Map<number, FakeLog[]>();
   private salt = 0;
 
   constructor(height: number) {
@@ -63,6 +83,11 @@ export class FakeChain implements RpcCaller {
     for (const logs of replacement) this.push(logs);
   }
 
+  /** The next `times` eth_getLogs calls covering this block return none of its logs. */
+  delayLogs(block: number, times: number) {
+    this.hiddenLogs.set(block, times);
+  }
+
   failNext(count: number, make: () => Error = () => new RpcTransportError('RPC connection closed before response', 'network', 'fake')) {
     for (let i = 0; i < count; i++) this.failures.push(make);
   }
@@ -82,7 +107,7 @@ export class FakeChain implements RpcCaller {
         if (n < this.prunedBelow) throw new RpcResponseError(`Cannot construct OnlineClientAtBlock: UnknownBlock: State already discarded for block ${n}`, -32000, null, method);
         const b = this.blocks[n];
         if (!b) return null as T;
-        return { number: '0x' + b.number.toString(16), hash: b.hash, parentHash: b.parentHash, timestamp: '0x' + b.timestamp.toString(16) } as T;
+        return { number: '0x' + b.number.toString(16), hash: b.hash, parentHash: b.parentHash, timestamp: '0x' + b.timestamp.toString(16), logsBloom: bloomOf([...b.logs, ...(this.bloomOnly.get(n) ?? [])]) } as T;
       }
       case 'eth_getLogs': {
         const q = params[0] as { address: string; fromBlock: string; toBlock: string; topics?: (string[] | string | null)[] };
@@ -95,6 +120,11 @@ export class FakeChain implements RpcCaller {
         const out: unknown[] = [];
         for (let n = from; n <= Math.min(to, this.head); n++) {
           const b = this.blocks[n];
+          const hidden = this.hiddenLogs.get(n) ?? 0;
+          if (hidden > 0) {
+            this.hiddenLogs.set(n, hidden - 1);
+            continue;
+          }
           b.logs.forEach((l, i) => {
             if (l.address.toLowerCase() !== q.address.toLowerCase()) return;
             if (allowed && !allowed.includes((l.topics[0] ?? '').toLowerCase())) return;

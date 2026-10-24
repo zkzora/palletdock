@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import type { Abi } from 'viem';
-import { EvmAdapter, RpcResponseError, RpcTransportError, type EvmBlockHeader, type EvmLog } from '@palletdock/chain';
+import { EvmAdapter, RpcResponseError, RpcTransportError, bloomMayContain, type EvmBlockHeader, type EvmLog } from '@palletdock/chain';
 import { decodeLog } from './decode.js';
 
 export interface IndexerOptions {
@@ -17,6 +17,15 @@ export interface IndexerOptions {
   backoffMaxMs?: number;
   /** Max chunks processed per claim before releasing the lease. */
   maxChunksPerClaim?: number;
+  /** Index only up to head minus this many blocks, so the node has served the newest blocks' logs and tip reorgs settle first. */
+  confirmations?: number;
+  /**
+   * When a block's logs bloom says this source may have a log there but eth_getLogs returned none,
+   * wait and retry this many times before committing without it (a bloom can be a false positive).
+   */
+  bloomRetries?: number;
+  /** Ranges up to this many blocks get every header's bloom checked (following the head; deep backfills skip it). */
+  bloomCheckMaxBlocks?: number;
   random?: () => number;
   /** Restrict claims to these sources (tests, targeted runs). */
   onlySourceIds?: string[];
@@ -66,6 +75,16 @@ export class FencedError extends Error {
 
 class InconsistentRangeError extends Error {}
 
+/** The node has not served logs that the block's bloom says may exist; retry before committing past it. */
+class MissingLogsError extends Error {
+  constructor(
+    readonly block: bigint,
+    readonly attempt: number,
+  ) {
+    super(`Block ${block} logs bloom matches this source but eth_getLogs returned no log yet (attempt ${attempt}).`);
+  }
+}
+
 const RANGE_ERROR_RE = /(range|block range|too many|limit|exceed|response size|query returned more than|max results)/i;
 
 /** The node discarded the state needed to serve this block (pruned history). */
@@ -81,6 +100,8 @@ export function isRangeTooLarge(error: unknown): boolean {
 
 export class IndexerEngine {
   private readonly o: Required<Omit<IndexerOptions, 'beforeCommit' | 'onlySourceIds'>> & Pick<IndexerOptions, 'beforeCommit' | 'onlySourceIds'>;
+  /** Bloom-but-no-log retries per source and block hash (in memory; a restart simply retries again). */
+  private readonly bloomMisses = new Map<string, number>();
 
   constructor(
     private readonly pool: pg.Pool,
@@ -96,6 +117,9 @@ export class IndexerEngine {
       backoffBaseMs: 1_000,
       backoffMaxMs: 120_000,
       maxChunksPerClaim: 20,
+      confirmations: 0,
+      bloomRetries: 5,
+      bloomCheckMaxBlocks: 64,
       random: Math.random,
       ...options,
     };
@@ -241,6 +265,13 @@ export class IndexerEngine {
           `The RPC node no longer serves the blocks this source needs (state pruned): ${(e as Error).message.split('\n')[0].slice(0, 160)}. Ancestry cannot be verified, so indexing stopped instead of guessing. Reindex from a recent start block within the node's retained window, or use a node with full history.`,
         );
       }
+      if (e instanceof MissingLogsError) {
+        // The node has not caught up with its own head yet: wait, without marking the source as failing.
+        const retryInMs = Math.min(this.o.backoffMaxMs, this.o.backoffBaseMs * 2 ** Math.min(e.attempt - 1, 16));
+        await this.pool.query(`UPDATE indexer_jobs SET next_run_at=now() + ($2::int * interval '1 millisecond') WHERE source_id=$1`, [src.id, retryInMs]);
+        if (e.attempt === 1) await this.opsLog(src.project_id, src.id, 'INFO', `Waiting for the node to serve logs at block ${e.block}: its logs bloom matches this source but eth_getLogs returned none yet.`, { block: e.block.toString() });
+        return { kind: 'backoff', sourceId: src.id, error: e.message, retryInMs };
+      }
       if (e instanceof InconsistentRangeError) {
         // Chain moved during the fetch; retry soon without counting as an RPC failure.
         await this.pool.query(`UPDATE indexer_jobs SET next_run_at=now() + interval '1 second' WHERE source_id=$1`, [src.id]);
@@ -254,7 +285,10 @@ export class IndexerEngine {
     const head = BigInt(await this.evm.blockNumber());
     const startBlock = BigInt(src.start_block);
     const endBlock = src.end_block === null ? null : BigInt(src.end_block);
-    const target = endBlock === null ? head : endBlock < head ? endBlock : head;
+    // Stay `confirmations` blocks behind the head: the newest blocks' logs may not be queryable yet.
+    const lag = BigInt(this.o.confirmations);
+    const safeHead = head > lag ? head - lag : 0n;
+    const target = endBlock === null ? safeHead : endBlock < safeHead ? endBlock : safeHead;
 
     // 1. Verify the checkpoint is still canonical; otherwise roll back to a common ancestor.
     if (src.checkpoint_block !== null) {
@@ -318,6 +352,28 @@ export class IndexerEngine {
       if (h.hash.toLowerCase() !== l.blockHash.toLowerCase()) throw new InconsistentRangeError(`Log block hash ${l.blockHash} is no longer canonical at ${l.blockNumber}.`);
       if (l.address.toLowerCase() !== src.contract_address.toLowerCase()) throw new Error('RPC returned a log for an unrequested address.');
     }
+    // An empty eth_getLogs answer is only trusted when each block's bloom agrees. Near the head the node
+    // can report a block before its logs are queryable; committing then would claim coverage with the log missing.
+    const unconfirmed: bigint[] = [];
+    if (to - from + 1n <= BigInt(this.o.bloomCheckMaxBlocks)) {
+      const withLogs = new Set(logs.map((l) => BigInt(l.blockNumber)));
+      for (let n = from; n <= to; n++) {
+        let h = headers.get(n.toString());
+        if (!h) {
+          const fetched = await this.evm.blockHeader(n);
+          if (!fetched) throw new InconsistentRangeError(`Block ${n} is not available yet.`);
+          h = fetched;
+          headers.set(n.toString(), h);
+        }
+        if (withLogs.has(n) || !h.logsBloom || !bloomMayContain(h.logsBloom, src.contract_address, src.event_topics)) continue;
+        const key = `${src.id}:${h.hash.toLowerCase()}`;
+        const attempt = (this.bloomMisses.get(key) ?? 0) + 1;
+        this.bloomMisses.set(key, attempt);
+        if (attempt <= this.o.bloomRetries) throw new MissingLogsError(n, attempt);
+        unconfirmed.push(n);
+      }
+    }
+
     // Re-read the range end after fetching logs to detect a reorg during the fetch.
     const toAgain = await this.evm.blockHeader(to);
     if (!toAgain || toAgain.hash.toLowerCase() !== headers.get(to.toString())!.hash.toLowerCase()) {
@@ -388,10 +444,14 @@ export class IndexerEngine {
       if (claim.attempts > 0) {
         await this.opsLog(src.project_id, src.id, 'INFO', `Recovered after ${claim.attempts} failed attempt(s); resumed from stored checkpoint.`, { fromBlock: from.toString(), toBlock: to.toString() }, c);
       }
+      for (const b of unconfirmed) {
+        await this.opsLog(src.project_id, src.id, 'WARN', `Block ${b} logs bloom matched this source but eth_getLogs still returned no log after ${this.o.bloomRetries} retries; committed without a record (bloom false positive or a node log-index gap).`, { block: b.toString() }, c);
+      }
       await this.opsLog(src.project_id, src.id, 'INFO', `Checkpoint committed at ${to.toString()}`, { fromBlock: from.toString(), toBlock: to.toString(), head: head.toString(), logs: logs.length, inserted: n }, c);
       return n;
     });
     claim.attempts = 0;
+    for (const key of this.bloomMisses.keys()) if (key.startsWith(`${src.id}:`)) this.bloomMisses.delete(key);
     return { kind: 'progress', sourceId: src.id, committedTo: to.toString(), logs: inserted };
   }
 

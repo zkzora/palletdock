@@ -57,6 +57,8 @@ DATABASE_URL=${{Postgres.DATABASE_URL}}
 PORTALDOT_EVM_RPC_URL=https://test-evm-rpc-v3.portaldot.dev
 PORTALDOT_SUBSTRATE_RPC_URL=wss://test-node-v3.portaldot.dev
 PALLETDOCK_PROCESS=worker
+# optional, default 3: blocks to stay behind the head before indexing
+# PALLETDOCK_INDEX_LAG_BLOCKS=3
 ```
 
 The worker must remain running. It does not need a public domain.

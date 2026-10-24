@@ -7,6 +7,7 @@
 - **Storage deposit** comes only from a pre-signing dry run, when available. It is not read from receipts and is not reconciled after execution.
 - **Mapping and native identity** need the Substrate endpoint; without it, mapping and dry runs are unavailable.
 - **Indexer scope:** EVM logs of tracked contracts only, one contract per source. No full-chain indexing, no native events. Reorgs deeper than 512 retained headers need a manual reindex. Editing a source creates a new one, with fresh coverage.
+- **Indexing delay at the head.** The worker indexes up to the head minus 3 blocks (about 18 s; `PALLETDOCK_INDEX_LAG_BLOCKS`). For short ranges near the head it also refuses to commit a block whose logs bloom matches the source while `eth_getLogs` returns nothing; it retries, and only then commits with a WARN, because a bloom can be a false positive. Before this guard, the hosted indexer missed one log at the head on 2026-10-24 ([evidence](evidence/2026-10-24-hosted-missed-log/)). That event cannot be re-read by a reindex because its blocks are outside the node's retained window.
 - **Transactions:** only PalletDock-prepared or explicitly registered hashes. A replacement transaction (same nonce, new hash) is not linked automatically.
 - **Artifacts:** no linked libraries, no source verification, no server-side compilation.
 - **Access:** one owner per deployment; no teams, no SSO, no billing. Not security audited.

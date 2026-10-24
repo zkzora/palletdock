@@ -314,3 +314,72 @@ describe('IndexerEngine', () => {
     expect(await canonicalLogs(src.sourceId)).toHaveLength(1);
   });
 });
+
+describe('logs that the node serves later than its head (tip log-index lag)', () => {
+  let chain: FakeChain;
+  beforeEach(() => {
+    chain = new FakeChain(5);
+  });
+
+  async function status(sourceId: string) {
+    return (await db.pool.query('SELECT status FROM indexer_sources WHERE id=$1', [sourceId])).rows[0].status as string;
+  }
+
+  it('does not commit past a block whose logs bloom matches while eth_getLogs is still empty, and indexes the log once it appears', async () => {
+    // Live 2026-10-24: block 168958 held store(45); eth_getLogs at the tip returned nothing and the checkpoint moved past it.
+    const src = await setupSource({ chain });
+    await src.make().drain();
+    const block = chain.mine([numberChanged(44n, 45n)]);
+    chain.delayLogs(block, 2);
+    const engine = src.make();
+
+    await makeRunnable(src.sourceId);
+    await engine.runOnce();
+    expect(BigInt((await checkpoint(src.sourceId)).block_number)).toBeLessThan(BigInt(block));
+    expect(await canonicalLogs(src.sourceId)).toHaveLength(0);
+    expect(await status(src.sourceId)).not.toBe('error'); // waiting for the node, not an RPC failure
+
+    await makeRunnable(src.sourceId);
+    await engine.runOnce();
+    expect(BigInt((await checkpoint(src.sourceId)).block_number)).toBeLessThan(BigInt(block));
+
+    await makeRunnable(src.sourceId);
+    await engine.drain();
+    expect((await checkpoint(src.sourceId)).block_number).toBe(String(chain.head));
+    const logs = await canonicalLogs(src.sourceId);
+    expect(logs.map((l) => [l.block_number, l.args.newValue])).toEqual([[String(block), '45']]);
+
+    await makeRunnable(src.sourceId);
+    await engine.drain();
+    expect(await canonicalLogs(src.sourceId)).toHaveLength(1);
+  });
+
+  it('a bloom false positive delays the checkpoint briefly but does not stall the source', async () => {
+    const src = await setupSource({ chain, engine: { bloomRetries: 2 } });
+    await src.make().drain();
+    const block = chain.mine([]);
+    chain.bloomOnly.set(block, [numberChanged(0n, 1n)]);
+    const engine = src.make();
+    for (let i = 0; i < 5; i++) {
+      await makeRunnable(src.sourceId);
+      await engine.runOnce();
+    }
+    expect((await checkpoint(src.sourceId)).block_number).toBe(String(block));
+    expect(await canonicalLogs(src.sourceId)).toHaveLength(0);
+    const warn = await db.pool.query(`SELECT message FROM ops_logs WHERE indexer_source_id=$1 AND level='WARN' AND message ILIKE '%bloom%'`, [src.sourceId]);
+    expect(warn.rowCount).toBe(1);
+  });
+
+  it('with confirmations it stays that many blocks behind the head and indexes each log once', async () => {
+    const src = await setupSource({ chain, engine: { confirmations: 3 } });
+    const block = chain.mine([numberChanged(0n, 7n)]);
+    await src.make().drain();
+    expect((await checkpoint(src.sourceId)).block_number).toBe(String(chain.head - 3));
+    expect(await canonicalLogs(src.sourceId)).toHaveLength(0);
+    chain.mineEmpty(3);
+    await makeRunnable(src.sourceId);
+    await src.make().drain();
+    expect((await checkpoint(src.sourceId)).block_number).toBe(String(chain.head - 3));
+    expect((await canonicalLogs(src.sourceId)).map((l) => l.block_number)).toEqual([String(block)]);
+  });
+});

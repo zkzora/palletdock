@@ -149,7 +149,8 @@ try {
     API_RATE_LIMIT_PER_MINUTE: '2000',
   };
   run('api', ['--filter', '@palletdock/api', 'start'], { ...common, API_HOST: '127.0.0.1', API_PORT: String(PORTS.api), WEB_ORIGIN: `http://127.0.0.1:${PORTS.web}` });
-  run('worker', ['--filter', '@palletdock/worker', 'start'], common);
+  // Hardhat mines a block only per transaction and serves its logs immediately, so no confirmation lag.
+  run('worker', ['--filter', '@palletdock/worker', 'start'], { ...common, PALLETDOCK_INDEX_LAG_BLOCKS: '0' });
   run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e', PALLETDOCK_CONSUMER_CONFIG: consumerConfig });
   await waitFor('api', async () => (await fetch(`http://127.0.0.1:${PORTS.api}/health`)).ok);
   await waitFor('web', async () => (await fetch(`http://127.0.0.1:${PORTS.web}/login`)).ok, 240_000);

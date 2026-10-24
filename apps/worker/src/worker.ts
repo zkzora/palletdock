@@ -28,7 +28,11 @@ class ControlledRpc implements RpcCaller {
 
 const rpc = new ControlledRpc(new JsonRpcClient(network.evmRpcUrl, { timeoutMs: 20_000 }));
 const evm = new EvmAdapter(network, rpc);
-const indexer = new IndexerEngine(pool, evm, { workerId, backoffMaxMs: 10 * 60_000 });
+// Blocks to stay behind the head. Portaldot's RPC can report a block before its logs are queryable
+// (live 2026-10-24: a log at the head was missed), and tip reorgs of 1–3 blocks are common.
+const indexLag = Number(process.env.PALLETDOCK_INDEX_LAG_BLOCKS ?? 3);
+if (!Number.isInteger(indexLag) || indexLag < 0 || indexLag > 64) throw new Error('PALLETDOCK_INDEX_LAG_BLOCKS must be an integer between 0 and 64.');
+const indexer = new IndexerEngine(pool, evm, { workerId, backoffMaxMs: 10 * 60_000, confirmations: indexLag });
 const tracker = new TransactionTracker(pool, evm);
 
 let stopping = false;

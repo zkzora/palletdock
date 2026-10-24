@@ -1,4 +1,4 @@
-import { getAddress, isAddress, type Hex } from 'viem';
+import { getAddress, hexToBytes, isAddress, keccak256, type Hex } from 'viem';
 import { toDecimalString, type PortaldotNetworkConfig } from '@palletdock/shared';
 import { JsonRpcClient, RpcResponseError, type RpcCaller } from './json-rpc.js';
 
@@ -18,6 +18,8 @@ export interface EvmBlockHeader {
   hash: Hex;
   parentHash: Hex;
   timestamp: string;
+  /** 2048-bit logs bloom, when the node reports a well-formed one. */
+  logsBloom?: Hex;
 }
 
 export interface EvmLog {
@@ -66,6 +68,25 @@ function requiredHex(value: unknown, field: string, bytes?: number): Hex {
     throw new Error(`RPC response has invalid ${field}`);
   }
   return value as Hex;
+}
+
+function inBloom(bloom: Uint8Array, item: Hex): boolean {
+  const d = hexToBytes(keccak256(item));
+  for (const i of [0, 2, 4]) {
+    const bit = ((d[i] << 8) | d[i + 1]) & 2047;
+    if (!(bloom[255 - Math.floor(bit / 8)] & (1 << bit % 8))) return false;
+  }
+  return true;
+}
+
+/**
+ * Whether a block's logs bloom may contain a log from this address with one of these topic0 values.
+ * A bloom can give false positives, never false negatives.
+ */
+export function bloomMayContain(logsBloom: Hex, address: string, topics0: readonly string[]): boolean {
+  const bloom = hexToBytes(logsBloom);
+  if (!inBloom(bloom, address.toLowerCase() as Hex)) return false;
+  return topics0.length === 0 || topics0.some((t) => inBloom(bloom, t.toLowerCase() as Hex));
 }
 
 function requiredData(value: unknown, field: string): Hex {
@@ -154,6 +175,7 @@ export class EvmAdapter {
       hash: requiredHex(raw.hash, 'block hash', 32),
       parentHash: requiredHex(raw.parentHash, 'parent hash', 32),
       timestamp: requiredQuantity(raw.timestamp, 'block timestamp'),
+      ...(typeof raw.logsBloom === 'string' && /^0x[0-9a-fA-F]{512}$/.test(raw.logsBloom) ? { logsBloom: raw.logsBloom as Hex } : {}),
     };
   }
 
