@@ -43,7 +43,7 @@ export function SiteFooter({ wide }: { wide?: boolean }) {
             </ul>
           </nav>
         ))}
-        <p className="site-footer-legal">PalletDock · independent developer tooling for Portaldot. Not an official Portaldot product; its API is not an official Portaldot RPC specification.</p>
+        <p className="site-footer-legal">PalletDock · independent developer tooling for Portaldot.</p>
       </div>
     </footer>
   );
