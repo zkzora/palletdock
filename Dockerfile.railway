@@ -20,7 +20,12 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/e2e-chain/package.json packages/e2e-chain/
 # Install before NODE_ENV=production: with it set, pnpm skips devDependencies, and the
 # services, migrations, and owner CLI all run through tsx (a root devDependency).
-RUN pnpm install --frozen-lockfile
+# Only the API, the worker, their workspace dependencies, and the root are installed: the web
+# app (Next.js) and the Hardhat fixture chain are not needed here, and every extra download is
+# another chance for a registry timeout to fail the build. Longer fetch retries cover the rest.
+RUN pnpm install --frozen-lockfile \
+      --filter "@palletdock/api..." --filter "@palletdock/worker..." --filter "{.}" \
+      --fetch-retries=5 --fetch-timeout=120000 --fetch-retry-maxtimeout=120000
 ENV NODE_ENV=production
 
 COPY . .
