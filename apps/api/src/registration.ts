@@ -3,6 +3,7 @@ import type pg from 'pg';
 import { hashPassword, randomToken, safeEqualStr, sha256Hex, withTx } from '@palletdock/db';
 import { signupSchema } from '@palletdock/shared';
 import { SESSION_COOKIE, fail } from './context.js';
+import { clientIp } from './client-ip.js';
 
 export type SignupMode = 'disabled' | 'invite' | 'open';
 
@@ -46,7 +47,7 @@ function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date | 
   });
 }
 
-export function registerSignupRoutes(app: FastifyInstance, pool: pg.Pool, cursorSecret: string): void {
+export function registerSignupRoutes(app: FastifyInstance, pool: pg.Pool, cursorSecret: string, proxySecret: string | null = null): void {
   const config = resolveSignupConfig();
 
   app.get('/auth/signup-config', async () => ({
@@ -63,7 +64,7 @@ export function registerSignupRoutes(app: FastifyInstance, pool: pg.Pool, cursor
       const parsed = signupSchema.safeParse(request.body);
       if (!parsed.success) return fail(reply, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid account details.');
       const email = parsed.data.email.trim().toLowerCase();
-      const ipHash = sha256Hex(`${cursorSecret}:${request.ip}`);
+      const ipHash = sha256Hex(`${cursorSecret}:${clientIp(request, proxySecret)}`);
       const recent = await pool.query(
         `SELECT count(1)::int AS attempts
            FROM signup_attempts

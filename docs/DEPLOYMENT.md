@@ -44,7 +44,10 @@ PALLETDOCK_CURSOR_SECRET=GENERATE_A_FRESH_32_BYTE_SECRET
 PORTALDOT_EVM_RPC_URL=https://test-evm-rpc-v3.portaldot.dev
 PORTALDOT_SUBSTRATE_RPC_URL=wss://test-node-v3.portaldot.dev
 PALLETDOCK_PROCESS=api
+PALLETDOCK_PROXY_SECRET=SAME_FRESH_SECRET_AS_IN_VERCEL
 ```
+
+Browser requests reach the API through the Vercel proxy, so the API sees every visitor as Vercel's server address. With `PALLETDOCK_PROXY_SECRET` set to the same value (at least 32 characters) on the API and in Vercel, the web app's `proxy.ts` forwards each visitor's address and the API uses it for rate limits and sign-in/sign-up lockouts; without it, all visitors share one quota. Only set it behind a platform that overwrites the visitor-supplied `x-forwarded-for` header (Vercel does). Sign-in attempts per visitor default to 10 per 15 minutes (`API_LOGIN_RATE_LIMIT_PER_15_MINUTES`).
 
 The API reads Railway's injected `PORT` automatically and listens on `0.0.0.0` in production. Configure `/health` as its healthcheck, deploy it, then generate a public Railway domain. Do not set `PALLETDOCK_DEV_CONTROLS=1`.
 
@@ -96,6 +99,7 @@ PALLETDOCK_CONSUMER_READ_KEY=HOSTED_READ_KEY
 PALLETDOCK_CONSUMER_CONTRACT=HOSTED_CONTRACT_ADDRESS
 PALLETDOCK_CONSUMER_EVENT=NumberChanged
 PALLETDOCK_CONSUMER_PUBLIC=1
+PALLETDOCK_PROXY_SECRET=SAME_FRESH_SECRET_AS_IN_RAILWAY_API
 ```
 
 `PALLETDOCK_CONSUMER_READ_KEY` must never use a `NEXT_PUBLIC_` prefix. The browser receives derived consumer state and the public key prefix only. `PALLETDOCK_CONSUMER_PUBLIC=1` exposes only the read-only `/consumer` demo; `/app`, workspace endpoints, keys, and mutation routes still require the owner session. Use a dedicated demo project and revoke the hosted read key after judging. Omit the flag or set it to `0` to require owner login again.

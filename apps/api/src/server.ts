@@ -30,6 +30,7 @@ import { registerRequestLogging, registerV1 } from './v1.js';
 import { registerWorkspace, type WorkspaceDeps } from './workspace.js';
 import { listenOptions } from './listen.js';
 import { registerSignupRoutes } from './registration.js';
+import { clientIp, proxySecret } from './client-ip.js';
 import {
   SESSION_COOKIE,
   cursorSecret,
@@ -46,6 +47,10 @@ loadEnv();
 const CURSOR_SECRET = cursorSecret();
 
 export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {}): Promise<FastifyInstance> {
+  const PROXY_SECRET = proxySecret();
+  // Sign-in attempts per visitor per 15 minutes (the fixture E2E stack raises it; it signs in many times from one address).
+  const LOGIN_LIMIT = Number(process.env.API_LOGIN_RATE_LIMIT_PER_15_MINUTES ?? 10);
+  if (!Number.isSafeInteger(LOGIN_LIMIT) || LOGIN_LIMIT < 1 || LOGIN_LIMIT > 1000) throw new Error('API_LOGIN_RATE_LIMIT_PER_15_MINUTES must be an integer from 1 to 1000.');
   const app = Fastify({
     logger: process.env.NODE_ENV === 'test' ? false : { redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-csrf-token"]'] },
     bodyLimit: 3 * 1024 * 1024,
@@ -57,6 +62,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   await app.register(rateLimit, {
     max: Number(process.env.API_RATE_LIMIT_PER_MINUTE ?? 120),
     timeWindow: '1 minute',
+    // Per visitor, also behind the web proxy (see client-ip.ts); route-level limits inherit this key.
+    keyGenerator: (request) => clientIp(request, PROXY_SECRET),
     errorResponseBuilder: (request, context) => {
       request.pdErrorCode = 'RATE_LIMITED';
       return { statusCode: 429, error: { code: 'RATE_LIMITED', message: `Too many requests. Retry after ${Math.ceil(context.ttl / 1000)} s.`, requestId: request.id } };
@@ -75,14 +82,14 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     return { status: 'ok', database: 'connected', observedAt: db.rows[0].now };
   });
 
-  registerSignupRoutes(app, pool, CURSOR_SECRET);
+  registerSignupRoutes(app, pool, CURSOR_SECRET, PROXY_SECRET);
 
-  app.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
+  app.post('/auth/login', { config: { rateLimit: { max: LOGIN_LIMIT, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
     if (!email || !password) return fail(reply, 'INVALID_REQUEST', 'Email and password are required.');
-    const ipHash = sha256Hex(`${CURSOR_SECRET}:${request.ip}`);
+    const ipHash = sha256Hex(`${CURSOR_SECRET}:${clientIp(request, PROXY_SECRET)}`);
     const recent = await pool.query(
       `SELECT count(1)::int AS failures FROM login_attempts WHERE (email=$1 OR ip_hash=$2) AND success=false AND created_at > now()-interval '15 minutes'`,
       [email, ipHash],

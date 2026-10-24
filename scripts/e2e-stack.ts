@@ -139,6 +139,8 @@ try {
   await pool.end();
 
   // 4. Services
+  // The web proxy forwards each visitor's address to the API with this secret (per-visitor rate limits).
+  const proxySecret = randomBytes(32).toString('base64url');
   const common = {
     DATABASE_URL,
     NODE_ENV: 'development',
@@ -148,6 +150,7 @@ try {
     PALLETDOCK_DEV_CONTROLS: '1',
     PALLETDOCK_CURSOR_SECRET: randomBytes(32).toString('base64url'),
     API_RATE_LIMIT_PER_MINUTE: '2000',
+    API_LOGIN_RATE_LIMIT_PER_15_MINUTES: '200',
   };
   run('api', ['--filter', '@palletdock/api', 'start'], {
     ...common,
@@ -157,10 +160,11 @@ try {
     PALLETDOCK_SIGNUP_MODE: 'invite',
     PALLETDOCK_SIGNUP_INVITE_CODE: signupInviteCode,
     PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES: '20',
+    PALLETDOCK_PROXY_SECRET: proxySecret,
   });
   // Hardhat mines a block only per transaction and serves its logs immediately, so no confirmation lag.
   run('worker', ['--filter', '@palletdock/worker', 'start'], { ...common, PALLETDOCK_INDEX_LAG_BLOCKS: '0' });
-  run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e', PALLETDOCK_CONSUMER_CONFIG: consumerConfig });
+  run('web', ['--filter', '@palletdock/web', 'exec', 'next', 'dev', '--hostname', '127.0.0.1', '--port', String(PORTS.web)], { PALLETDOCK_API_URL: `http://127.0.0.1:${PORTS.api}`, NEXT_DIST_DIR: '.next-e2e', PALLETDOCK_CONSUMER_CONFIG: consumerConfig, PALLETDOCK_PROXY_SECRET: proxySecret });
   await waitFor('api', async () => (await fetch(`http://127.0.0.1:${PORTS.api}/health`)).ok);
   await waitFor('web', async () => (await fetch(`http://127.0.0.1:${PORTS.web}/login`)).ok, 240_000);
   log('api and web ready');
