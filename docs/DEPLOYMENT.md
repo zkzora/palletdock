@@ -26,7 +26,7 @@ Create a Railway project with a PostgreSQL service plus two empty services named
 For both `api` and `worker`:
 
 - set `RAILWAY_DOCKERFILE_PATH=Dockerfile.railway`;
-- set pre-deploy command to `pnpm db:migrate` (the migration runner uses a Postgres advisory lock, so concurrent attempts serialize safely);
+- set pre-deploy command to `sh /app/deploy/railway-migrate.sh` (the migration runner uses a Postgres advisory lock, so concurrent attempts serialize safely). The image installs only the API and worker dependencies, so containers run `tsx` directly; calling `pnpm` inside a container would make it download the rest of the workspace;
 - set restart policy to **Always**;
 - reference the private database URL as `DATABASE_URL=${{Postgres.DATABASE_URL}}` (replace `Postgres` if the database service has another name);
 - do not enable serverless/sleeping behavior for the worker.
@@ -67,7 +67,7 @@ After the API is healthy, create an operator account without putting the passwor
 
 ```sh
 railway ssh --service api
-pnpm owner:create --email you@example.com
+sh /app/deploy/railway-owner.sh --email you@example.com
 ```
 
 Enter the password only at the interactive prompt. Running the command again for the same email resets that account and revokes only its sessions.

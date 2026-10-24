@@ -35,7 +35,7 @@ The full MVP workflow is implemented, passes automated tests (including a browse
 
 - Chosen shape: Vercel for `apps/web`; Railway for separate API and always-on worker services plus private PostgreSQL.
 - The API now accepts Railway's injected `PORT`, uses `0.0.0.0` by default in production, and validates the port (`apps/api/src/listen.ts`, `server-config.test.ts`).
-- `Dockerfile.railway` selects API or worker from `PALLETDOCK_SERVICE`; both services run `pnpm db:migrate` as a pre-deploy command. Migrations already serialize with a PostgreSQL advisory lock.
+- `Dockerfile.railway` selects API or worker from `PALLETDOCK_SERVICE`; both services run `sh /app/deploy/railway-migrate.sh` as a pre-deploy command (tsx directly, never pnpm at runtime). Migrations already serialize with a PostgreSQL advisory lock.
 - Jury access should use `PALLETDOCK_CONSUMER_PUBLIC=1` on Vercel. This exposes only derived read-only consumer state for a dedicated demo project; the read key remains server-side and workspace/mutation auth is unchanged. The default remains private.
 - Nothing has been committed, pushed, deployed, or configured in a hosting account. Docker is unavailable on this machine, so the new Railway image still needs its first Railway build. Follow `docs/DEPLOYMENT.md` exactly and do not reuse the local read key or database.
 

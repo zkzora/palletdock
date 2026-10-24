@@ -26,7 +26,10 @@ COPY packages/e2e-chain/package.json packages/e2e-chain/
 RUN pnpm install --frozen-lockfile \
       --filter "@palletdock/api..." --filter "@palletdock/worker..." --filter "{.}" \
       --fetch-retries=5 --fetch-timeout=120000 --fetch-retry-maxtimeout=120000
-ENV NODE_ENV=production
+# Containers start through deploy/*.sh with tsx directly; should pnpm still run a script,
+# it must not "repair" the intentionally partial install by downloading the rest.
+ENV NODE_ENV=production \
+    pnpm_config_verify_deps_before_run=false
 
 COPY . .
 
