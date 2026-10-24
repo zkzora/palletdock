@@ -32,5 +32,18 @@ the block had no matching event. The local live runs did not hit this because `s
   its head"): they failed on the previous engine (the checkpoint moved past the block with the
   log) and pass now; the fixture E2E suite also passes.
 
+## Verified live after the fix
+
+The fixed worker (commit `56b2212`, Railway deployment `32d4aa7c`) kept its checkpoint exactly 3
+blocks behind the observed head (170095/170098, 170097/170100, 170099/170102), status `following`,
+no errors. The owner then sent `store(46)`:
+
+| Field | Value |
+| --- | --- |
+| Tx | `0x9d5c8df4cc61fcfb86264dca9c1c0e510d2646c92f7a89ec7908a7cf9e8d20e9`, sender `0xfA02…fA8F` |
+| Block | **170355** (`0x5bd96f9347…`), 05:21:36 UTC; `NumberChanged` 20261024 → 46, log index 3 |
+| Indexed | 05:21:57 UTC (21 s later, consistent with the 3-block lag) |
+| Public `/consumer` (signed out) | value **46**, 2 rows (170355 and 169491) with block hash, tx hash, and log index matching the chain; still 2 rows after a reload; finality *Unknown: not confirmed* |
+
 The missed event at 168958 is not recovered: its blocks are outside the node's retained state
 window, so a reindex from the source's start block is rejected.
