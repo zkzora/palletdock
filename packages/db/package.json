@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./testing": "./src/testing.ts" },
   "scripts": {
     "migrate": "tsx src/migrate-cli.ts",
     "owner:create": "tsx src/owner-cli.ts",

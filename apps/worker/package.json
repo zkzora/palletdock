@@ -7,13 +7,15 @@
     "dev": "tsx watch src/worker.ts",
     "start": "tsx src/worker.ts",
     "network:verify": "tsx src/network-verify.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@palletdock/chain": "workspace:*",
     "@palletdock/db": "workspace:*",
     "@palletdock/shared": "workspace:*",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "viem": "^2.37.0"
   },
   "devDependencies": {
     "@types/pg": "^8.15.5"

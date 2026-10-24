@@ -57,3 +57,29 @@ describe('EvmAdapter', () => {
     expect(toBlockTag('latest')).toBe('latest');
   });
 });
+
+describe('EvmAdapter.logs', () => {
+  it('accepts empty log data and keeps indexes exact', async () => {
+    const rpc = new FakeRpc({
+      eth_getLogs: [
+        {
+          address: '0x5fbdb2315678afecb367f032d93f642f64180aa3',
+          topics: [H32],
+          data: '0x',
+          blockNumber: '0x10',
+          blockHash: H32_B,
+          transactionHash: H32,
+          transactionIndex: '0x0',
+          logIndex: '0x2',
+        },
+      ],
+    });
+    const [log] = await new EvmAdapter(PORTALDOT_V3_TESTNET, rpc).logs({ address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', fromBlock: 0n, toBlock: 16n });
+    expect(log).toMatchObject({ data: '0x', blockNumber: '16', logIndex: 2, removed: false });
+  });
+
+  it('rejects odd-length log data', async () => {
+    const rpc = new FakeRpc({ eth_getLogs: [{ address: '0x5fbdb2315678afecb367f032d93f642f64180aa3', topics: [], data: '0x1', blockNumber: '0x1', blockHash: H32, transactionHash: H32, transactionIndex: '0x0', logIndex: '0x0' }] });
+    await expect(new EvmAdapter(PORTALDOT_V3_TESTNET, rpc).logs({ address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', fromBlock: 0n, toBlock: 1n })).rejects.toThrow('invalid log data');
+  });
+});
