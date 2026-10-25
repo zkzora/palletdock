@@ -4,13 +4,13 @@
 
 A developer workspace for Solidity builders on **Portaldot V3 Testnet**. Deploy or connect a contract, track its transactions, index its events, and expose the data to your application from one project.
 
-[Website](https://palletdock.vercel.app/) · [Open workspace](https://palletdock.vercel.app/app) · [Documentation](https://palletdock.vercel.app/docs) · [Testnet evidence](docs/TESTNET_EVIDENCE.md)
+[Website](https://palletdock.vercel.app/) · [Create an account](https://palletdock.vercel.app/signup) · [Open workspace](https://palletdock.vercel.app/app) · [Documentation](https://palletdock.vercel.app/docs) · [Testnet evidence](docs/TESTNET_EVIDENCE.md)
 
 ![PalletDock workspace showing an active event indexer, checkpoint, coverage, and decoded contract event](docs/evidence/2026-10-21-live/acceptance/main-06-indexed.png)
 
 *Actual workspace from the recorded 21 October 2026 testnet run, using a local application stack connected to Portaldot V3. This screenshot shows that run's state, not the current hosted deployment.*
 
-**Status:** working testnet MVP, with a hosted web app, API, worker, and private database. The developer workspace requires owner login. The [public read-only integration example](https://palletdock.vercel.app/consumer) can be explored without workspace access; it demonstrates an application consuming PalletDock's API. To try the full workspace yourself, follow [Quick start](#quick-start) and create your own local owner.
+**Status:** working testnet MVP, with a hosted web app, API, worker, and private database. To use the workspace, [create an account](https://palletdock.vercel.app/signup) with an email and password; each account sees only its own projects, contracts, transactions, and API keys. Writes need a browser wallet on Portaldot V3 Testnet (EVM chain 420420777) with test tPOT. The [public read-only integration example](https://palletdock.vercel.app/consumer) needs no account; it demonstrates an application consuming PalletDock's API. To run your own stack instead, follow [Quick start](#quick-start).
 
 ## The problem
 
@@ -115,7 +115,7 @@ pnpm owner:create --email you@example.com
 
 The owner command prompts for a password of at least 12 characters. Running it again for the same email resets only that account and revokes only its sessions.
 
-Self-service registration is disabled by default. Set `PALLETDOCK_SIGNUP_MODE=invite` with a server-side `PALLETDOCK_SIGNUP_INVITE_CODE` of at least 16 characters to let users create their own isolated accounts at `/signup`. `open` mode removes the code requirement, but should not be exposed without deployment-level CAPTCHA, quotas, and abuse monitoring.
+Self-service registration is disabled by default. Set `PALLETDOCK_SIGNUP_MODE=invite` with a server-side `PALLETDOCK_SIGNUP_INVITE_CODE` of at least 16 characters to let users create their own isolated accounts at `/signup`. `open` mode removes the code requirement, but should not be exposed long-term without deployment-level CAPTCHA, quotas, and abuse monitoring. The hosted demo runs in `open` mode during hackathon judging, with per-visitor sign-up and sign-in rate limits; it returns to `invite` or `disabled` afterwards.
 
 Start the API and worker in separate terminals:
 
