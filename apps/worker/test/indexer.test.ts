@@ -61,7 +61,9 @@ async function setupSource(opts: { start?: number; end?: number | null; chain: F
   const make = (extra: Partial<IndexerOptions> = {}) =>
     new IndexerEngine(db.pool, new EvmAdapter(PORTALDOT_V3_TESTNET, opts.chain), {
       workerId: `test-${++seq}`,
-      pollMs: 0,
+      // Long enough that drain() stops once the source has caught up instead of re-claiming it up to
+      // 1000 times; tests that mine more blocks trigger the next run explicitly with makeRunnable.
+      pollMs: 60_000,
       backoffBaseMs: 10,
       backoffMaxMs: 20,
       random: () => 0,

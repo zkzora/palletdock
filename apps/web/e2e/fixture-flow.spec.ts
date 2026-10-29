@@ -162,6 +162,8 @@ test.describe('fixture vertical slice (desktop)', () => {
     await page.locator('#imp-name').fill('Nothing');
     await page.locator('#imp-address').fill('0x1111111111111111111111111111111111111111');
     await page.getByRole('button', { name: 'Use PalletDockStorage ABI' }).click();
+    // The sample ABI is fetched asynchronously; submit only once it is in the form.
+    await expect(page.locator('#imp-abi')).toHaveValue(/NumberChanged/);
     await page.getByRole('button', { name: 'Import contract' }).click();
     await expect(page.getByText(/No runtime code exists/)).toBeVisible();
   });
