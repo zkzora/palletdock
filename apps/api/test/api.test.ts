@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { encodeErrorResult, encodeFunctionResult, type Abi } from 'viem';
 import { EvmAdapter, RpcResponseError, type RpcCaller } from '@palletdock/chain';
 import { PORTALDOT_V3_TESTNET } from '@palletdock/shared';
+import { sampleArtifacts } from '@palletdock/contracts';
 import { createTestDatabase, seedWorkspace, type TestDatabase } from '../../../test-support/db.js';
 import { buildServer } from '../src/server.js';
 // The consumer demo's framework-free core, exercised against the real /v1 routes.
@@ -365,6 +366,33 @@ describe('contracts', () => {
     const prep = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/artifacts/${sample.json().data.id}/prepare-deploy`, { args: [], from: FROM });
     expect(prep.statusCode).toBe(200);
     expect(prep.json().data.request.data.startsWith('0x')).toBe(true);
+  });
+
+  it('the payments sample deploys, sends value to its payable pay(orderRef), and refuses value for withdraw', async () => {
+    const sample = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/artifacts/samples/payments`);
+    expect(sample.statusCode).toBe(201);
+    const deploy = await ws(sessionA, 'POST', `/workspace/projects/${A.projectId}/artifacts/${sample.json().data.id}/prepare-deploy`, { args: [], from: FROM });
+    expect(deploy.statusCode).toBe(200);
+
+    const project = (await ws(sessionA, 'POST', '/workspace/projects', { name: 'Payments demo' })).json().data;
+    const payAbi = sampleArtifacts().find((s) => s.id === 'payments')!.artifact.abi;
+    const imported = await ws(sessionA, 'POST', `/workspace/projects/${project.id}/contracts/import`, { name: 'Payments', address: ADDR, abi: payAbi });
+    expect(imported.statusCode).toBe(201);
+    const contractId = imported.json().data.id;
+    const detail = (await ws(sessionA, 'GET', `/workspace/projects/${project.id}/contracts/${contractId}`)).json().data;
+    expect(detail.writeFunctions.find((f: { name: string }) => f.name === 'pay').payable).toBe(true);
+    expect(detail.writeFunctions.find((f: { name: string }) => f.name === 'withdraw').payable).toBe(false);
+
+    const orderRef = '0x' + '0'.repeat(62) + '7b'; // order #123
+    const oneTpot = '1000000000000000000';
+    const pay = await ws(sessionA, 'POST', `/workspace/projects/${project.id}/contracts/${contractId}/prepare-write`, { function: 'pay', args: [orderRef], value: oneTpot, from: FROM });
+    expect(pay.statusCode).toBe(200);
+    expect(pay.json().data.request.value).toBe('0xde0b6b3a7640000');
+    expect(pay.json().data.review.valueRaw).toBe(oneTpot);
+
+    const withdraw = await ws(sessionA, 'POST', `/workspace/projects/${project.id}/contracts/${contractId}/prepare-write`, { function: 'withdraw', args: [FROM], value: '1', from: FROM });
+    expect(withdraw.statusCode).toBe(400);
+    expect(withdraw.json().error.message).toMatch(/not payable/);
   });
 });
 

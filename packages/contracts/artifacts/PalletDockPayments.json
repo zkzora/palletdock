@@ -1,0 +1,165 @@
+{
+  "contractName": "PalletDockPayments",
+  "sourceName": "src/PalletDockPayments.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "NotOwner",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NothingToWithdraw",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "TransferFailed",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ZeroAmount",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "orderRef",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "PaymentReceived",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "Withdrawn",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "balance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "orderRef",
+          "type": "bytes32"
+        }
+      ],
+      "name": "pay",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalReceived",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address payable",
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "name": "withdraw",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60a060405234801561001057600080fd5b5033608052608051610322610036600039600081816096015261011701526103226000f3fe60806040526004361061004a5760003560e01c806351cff8d91461004f5780638609cad1146100715780638da5cb5b14610084578063a3c2c462146100d5578063b69ef8a8146100f9575b600080fd5b34801561005b57600080fd5b5061006f61006a3660046102a5565b61010c565b005b61006f61007f3660046102d5565b610234565b34801561009057600080fd5b506100b87f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020015b60405180910390f35b3480156100e157600080fd5b506100eb60005481565b6040519081526020016100cc565b34801561010557600080fd5b50476100eb565b336001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001614610155576040516330cd747160e01b815260040160405180910390fd5b47600081900361017857604051630686827b60e51b815260040160405180910390fd5b6000826001600160a01b03168260405160006040518083038185875af1925050503d80600081146101c5576040519150601f19603f3d011682016040523d82523d6000602084013e6101ca565b606091505b50509050806101ec576040516312171d8360e31b815260040160405180910390fd5b826001600160a01b03167f7084f5476618d8e60b11ef0d7d3f06914655adb8793e28ff7f018d4c76d505d58360405161022791815260200190565b60405180910390a2505050565b3460000361025557604051631f2a200560e01b815260040160405180910390fd5b3460008082825461026691906102ee565b9091555050604051348152819033907f4c3e182d9e8a50f18c7d26c444315e47590087919a9e619901c6cae494e2e24d9060200160405180910390a350565b6000602082840312156102b757600080fd5b81356001600160a01b03811681146102ce57600080fd5b9392505050565b6000602082840312156102e757600080fd5b5035919050565b8082018082111561030f57634e487b7160e01b600052601160045260246000fd5b9291505056fea164736f6c6343000818000a",
+  "deployedBytecode": "0x60806040526004361061004a5760003560e01c806351cff8d91461004f5780638609cad1146100715780638da5cb5b14610084578063a3c2c462146100d5578063b69ef8a8146100f9575b600080fd5b34801561005b57600080fd5b5061006f61006a3660046102a5565b61010c565b005b61006f61007f3660046102d5565b610234565b34801561009057600080fd5b506100b87f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b0390911681526020015b60405180910390f35b3480156100e157600080fd5b506100eb60005481565b6040519081526020016100cc565b34801561010557600080fd5b50476100eb565b336001600160a01b037f00000000000000000000000000000000000000000000000000000000000000001614610155576040516330cd747160e01b815260040160405180910390fd5b47600081900361017857604051630686827b60e51b815260040160405180910390fd5b6000826001600160a01b03168260405160006040518083038185875af1925050503d80600081146101c5576040519150601f19603f3d011682016040523d82523d6000602084013e6101ca565b606091505b50509050806101ec576040516312171d8360e31b815260040160405180910390fd5b826001600160a01b03167f7084f5476618d8e60b11ef0d7d3f06914655adb8793e28ff7f018d4c76d505d58360405161022791815260200190565b60405180910390a2505050565b3460000361025557604051631f2a200560e01b815260040160405180910390fd5b3460008082825461026691906102ee565b9091555050604051348152819033907f4c3e182d9e8a50f18c7d26c444315e47590087919a9e619901c6cae494e2e24d9060200160405180910390a350565b6000602082840312156102b757600080fd5b81356001600160a01b03811681146102ce57600080fd5b9392505050565b6000602082840312156102e757600080fd5b5035919050565b8082018082111561030f57634e487b7160e01b600052601160045260246000fd5b9291505056fea164736f6c6343000818000a",
+  "linkReferences": {},
+  "compiler": {
+    "name": "solc",
+    "version": "0.8.24+commit.e11b9ed9.Emscripten.clang",
+    "settings": {
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "evmVersion": "paris",
+      "metadata": {
+        "bytecodeHash": "none"
+      }
+    },
+    "dependencies": {
+      "@openzeppelin/contracts": "5.1.0"
+    }
+  },
+  "provenance": {
+    "sourceSha256": "5b1291bc4f62d43014a5ca11094de83f13280672547dbbb5239617413e5465be",
+    "creationBytecodeSha256": "31b5c3e2f70054c8e65e53f74cfda7f3edc32bba80894607adf42e922f45b725",
+    "compatibility": "EVM bytecode. Portaldot V3 Revive acceptance is confirmed only by a recorded live deployment (see docs/TESTNET_EVIDENCE.md)."
+  }
+}

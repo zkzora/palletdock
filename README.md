@@ -35,13 +35,15 @@ See the [testnet walkthrough](docs/WALKTHROUGH.md) for the detailed steps.
 | Workspace area | What you can do |
 | --- | --- |
 | Projects | Create and switch projects, export without secrets, archive, and restore inside an owner-isolated workspace |
-| Contracts | Deploy or import contracts, manage ABI versions, call reads, and prepare wallet-signed writes with supported estimates and error decoding |
+| Contracts | Deploy or import contracts, manage ABI versions, call reads, and prepare wallet-signed writes (including native value for `payable` functions) with supported estimates and error decoding; bundled samples: Storage, ERC-20, ERC-721, and Payments |
 | Transactions | Inspect inclusion, execution, indexing, finality, and tracking conditions, including pruned receipts and reorganized transactions |
 | Indexer | Configure EVM event sources, inspect raw and decoded logs, follow checkpoints, and see retry or recovery-required states |
 | API | Query contracts, transactions, events, and indexer status through scoped, expiring, revocable keys and snapshot pagination |
 | Monitoring | Inspect RPC observations, worker activity, indexing progress, and operational logs |
 
 The [consumer example](docs/CONSUMER.md) is a separate app-side reader of the public `/v1` API. It shows how another application can display indexed values, coverage, freshness, and unknown finality while keeping its read key server-side.
+
+The **payments sample** (`PalletDockPayments`) accepts tPOT through `pay(bytes32 orderRef)` and emits `PaymentReceived(payer, orderRef, amount)`, so an application can match each payment to its order through indexed events; the deployer withdraws with `withdraw(to)`. It is verified on the local fixture chain (deploy, pay with value, indexed event, withdraw) and has not yet been run on Portaldot V3 Testnet, where the existential deposit and contract storage deposit may affect withdrawing the full balance.
 
 ## Why Portaldot V3
 
@@ -210,7 +212,7 @@ apps/worker         Event indexer, receipt tracker, and network probes
 packages/chain      EVM JSON-RPC and Substrate runtime adapters
 packages/shared     Network configuration, lossless quantities, and validation
 packages/db         PostgreSQL migrations and owner CLI
-packages/contracts  Sample Solidity contracts and reproducible artifacts
+packages/contracts  Sample Solidity contracts (Storage, ERC-20, ERC-721, Payments) and reproducible artifacts
 packages/e2e-chain  Local Hardhat chain for fixture tests
 docs/               Guides, API specification, status, and testnet evidence
 ```

@@ -18,5 +18,6 @@ export function sampleArtifacts(): SampleArtifact[] {
     { id: 'storage', title: 'PalletDockStorage', description: 'store/retrieve a uint256 and emit NumberChanged. No constructor arguments.', artifact: load('PalletDockStorage') },
     { id: 'erc20', title: 'PalletDockToken (ERC-20)', description: 'Fixed-supply ERC-20 built on OpenZeppelin 5.1.0. Constructor mints initialSupply to the deployer.', artifact: load('PalletDockToken') },
     { id: 'erc721', title: 'PalletDockCollectible (ERC-721)', description: 'Open-mint ERC-721 test fixture built on OpenZeppelin 5.1.0.', artifact: load('PalletDockCollectible') },
+    { id: 'payments', title: 'PalletDockPayments', description: 'Accepts tPOT payments with pay(orderRef), emits PaymentReceived(payer, orderRef, amount), and lets the deployer withdraw. No constructor arguments.', artifact: load('PalletDockPayments') },
   ];
 }
