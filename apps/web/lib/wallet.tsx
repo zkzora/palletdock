@@ -23,11 +23,13 @@ declare global {
   }
 }
 
-import { connectWithTimeout, sendWithProvider, switchOrAddChain, type Eip1193, type SendOutcome, type SwitchResult } from './wallet-core';
+import { connectWithTimeout, detectWallet, sendWithProvider, switchOrAddChain, type Eip1193, type SendOutcome, type SwitchResult } from './wallet-core';
 export type { SendOutcome } from './wallet-core';
 
 interface WalletValue {
   available: boolean;
+  /** Injected wallet name from its provider flags; null when unknown. MetaMask is the tested wallet. */
+  walletName: string | null;
   account: string | null;
   chainId: string | null;
   onPortaldot: boolean;
@@ -122,6 +124,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<WalletValue>(
     () => ({
       available: !!provider,
+      walletName: detectWallet(provider),
       account,
       chainId,
       onPortaldot: chainId === PORTALDOT_CHAIN.chainIdHex,

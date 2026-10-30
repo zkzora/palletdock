@@ -6,6 +6,7 @@ import { verifyAndRecordNetwork } from './network.js';
 import { IndexerEngine } from './indexer/engine.js';
 import { TransactionTracker } from './tx-tracker.js';
 import { Backoff } from './backoff.js';
+import { closeExpiredGuests } from './guest-expiry.js';
 
 loadEnv();
 const workerId = `${hostname()}:${process.pid}:${randomToken(6)}`;
@@ -139,6 +140,15 @@ async function pruneRetention(): Promise<void> {
   await pool.query(`DELETE FROM worker_heartbeats WHERE last_seen_at < now() - interval '1 day'`);
 }
 
+/** Shut down expired temporary workspaces in bounded batches (authorization and claims already refuse them). */
+async function expireGuests(): Promise<void> {
+  for (let i = 0; i < 10 && !stopping; i++) {
+    const closed = await closeExpiredGuests(pool, 25);
+    if (closed.length) console.log(`[worker] closed ${closed.length} expired playground workspace(s)`);
+    if (closed.length < 25) break;
+  }
+}
+
 async function shutdown(signal: string): Promise<void> {
   if (stopping) return;
   stopping = true;
@@ -160,6 +170,7 @@ timers.push(setInterval(safe('commands', consumeCommands), 2_000));
 timers.push(setInterval(safe('indexer', indexLoop), 2_000));
 timers.push(setInterval(safe('tracker', trackLoop), 4_000));
 timers.push(setInterval(safe('retention', pruneRetention), 3_600_000));
+timers.push(setInterval(safe('guest-expiry', expireGuests), 60_000));
 process.once('SIGINT', () => void shutdown('SIGINT'));
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 console.log(`[worker] started ${workerId}${devControls ? ' (development controls enabled)' : ''}`);

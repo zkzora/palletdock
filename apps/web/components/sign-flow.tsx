@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useWallet } from '@/lib/wallet';
 import { groupDigits } from '@/lib/format';
 import { KV, Modal, Notice } from '@/components/ui';
+import { useWorkspace } from '@/components/workspace-shell';
 
 export interface Prepared {
   transactionId: string;
@@ -81,8 +83,25 @@ export function SignDialog({
   extraRows?: Array<[string, React.ReactNode]>;
 }) {
   const wallet = useWallet();
+  const { fixture } = useWorkspace();
   const [phase, setPhase] = useState<'review' | 'waiting'>('review');
   const [err, setErr] = useState('');
+  const [balance, setBalance] = useState<string | null>(null);
+  const accountChanged = !!wallet.account && wallet.account.toLowerCase() !== prepared.request.from.toLowerCase();
+
+  // Balance check before asking for a signature: value plus the estimated maximum fee.
+  // Unknown (wallet on another chain, RPC error) does not block; the wallet still checks.
+  useEffect(() => {
+    let live = true;
+    if (wallet.account && wallet.onPortaldot && !accountChanged) wallet.balanceRaw().then((b) => live && setBalance(b));
+    else setBalance(null);
+    return () => {
+      live = false;
+    };
+  }, [wallet, accountChanged]);
+  const needed = BigInt(prepared.request.value || '0x0') + (prepared.review.fee?.maxFeeRaw ? BigInt(prepared.review.fee.maxFeeRaw) : 0n);
+  const insufficient = balance !== null && BigInt(balance) < needed;
+
   async function record(outcome: string, body: Record<string, unknown>) {
     await request(`/workspace/projects/${projectId}/transactions/${prepared.transactionId}/submission`, { method: 'POST', body: JSON.stringify({ outcome, ...body }) });
   }
@@ -139,7 +158,7 @@ export function SignDialog({
             <button className="button secondary" onClick={onClose}>
               Back
             </button>
-            <button className="button" onClick={() => void sign()} disabled={!wallet.account} data-autofocus>
+            <button className="button" onClick={() => void sign()} disabled={!wallet.account || accountChanged || insufficient} data-autofocus>
               Request signature
             </button>
           </>
@@ -148,8 +167,19 @@ export function SignDialog({
     >
       {phase === 'review' ? (
         <>
+          <div className="badge-row" style={{ marginTop: 0 }}>
+            {fixture ? (
+              <span className="chip" style={{ borderColor: '#3d3320', color: '#e6d3a8' }}>
+                FIXTURE NETWORK transaction · local test chain, not Portaldot
+              </span>
+            ) : (
+              <span className="chip" style={{ borderColor: '#5a4a2a', color: '#f3e2bb' }}>
+                Real testnet transaction
+              </span>
+            )}
+          </div>
           <p className="muted" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55 }}>
-            Review the exact network, account, call, value, fee, and deposit. Your wallet shows the final request; nothing is submitted until you approve it there.
+            Review the exact network, account, call, value, fee, and deposit. Your wallet shows the final request; nothing is submitted until you approve it there. A signed transaction cannot be reversed.
           </p>
           <div className="card panel" style={{ background: '#111214' }}>
             <ReviewRows prepared={prepared} extra={extraRows} />
@@ -161,6 +191,17 @@ export function SignDialog({
           )}
           {feeFailed && !prepared.review.simulatedRevert && <Notice tone="warning" title="Fee estimate failed">The node could not estimate gas. The call may revert, or the RPC may be unavailable.</Notice>}
           {!wallet.account && <Notice tone="warning">Connect a wallet to sign.</Notice>}
+          {accountChanged && (
+            <Notice tone="warning" title="The wallet account changed">
+              This review was prepared for {prepared.request.from}, but the wallet now selects {wallet.account}. Close and review again with the account you want to sign with.
+            </Notice>
+          )}
+          {insufficient && (
+            <Notice tone="danger" title="Not enough test tPOT">
+              This account holds {groupDigits(balance!)} raw base units; this transaction needs at least {groupDigits(needed.toString())} (value plus the estimated maximum fee). Fund the account with test tPOT
+              first (<Link href="/docs/funding">Funding</Link>). PalletDock does not send test tokens.
+            </Notice>
+          )}
           {err && <Notice tone="danger">{err}</Notice>}
         </>
       ) : (

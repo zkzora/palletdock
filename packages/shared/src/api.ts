@@ -21,6 +21,11 @@ export const ERROR_CODES = {
   PAYLOAD_TOO_LARGE: 413,
   RATE_LIMITED: 429,
   REGISTRATION_DISABLED: 403,
+  WORKSPACE_EXPIRED: 401,
+  GUEST_RESTRICTED: 403,
+  LIMIT_REACHED: 409,
+  PLAYGROUND_DISABLED: 403,
+  PLAYGROUND_FULL: 503,
   NETWORK_IDENTITY_MISMATCH: 503,
   SERVICE_UNAVAILABLE: 503,
   INTERNAL: 500,
@@ -31,12 +36,22 @@ export const signupSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.').max(254, 'Email is too long.'),
   password: z.string().min(12, 'Password must be at least 12 characters.').max(128, 'Password is limited to 128 characters.'),
   inviteCode: z.string().max(256, 'Registration code is too long.').optional(),
+  /** Convert the current temporary playground workspace into this account instead of creating an empty one. */
+  claimGuest: z.boolean().optional(),
+});
+
+export const PLAYGROUND_TEMPLATE_IDS = ['storage', 'erc20', 'erc721', 'payments'] as const;
+
+export const playgroundStartSchema = z.object({
+  template: z.enum(PLAYGROUND_TEMPLATE_IDS).optional(),
 });
 
 export const projectCreateSchema = z.object({
   name: z.string().trim().min(1, 'Enter project name.').max(80, 'Project name is limited to 80 characters.'),
   description: z.string().trim().max(500, 'Description is limited to 500 characters.').optional().default(''),
   networkId: z.literal('portaldot-v3-testnet').optional().default('portaldot-v3-testnet'),
+  /** Show the guided playground checklist for this project. */
+  playground: z.boolean().optional().default(false),
 });
 
 export const projectUpdateSchema = z.object({

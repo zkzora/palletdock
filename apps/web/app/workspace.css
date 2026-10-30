@@ -73,3 +73,33 @@
 .docs-nav-link:hover { background: #1b1d21 !important; color: #ecedee !important; }
 .docs-card:hover { border-color: #3a3d43 !important; background: #191b1f; }
 .docs-toc-link:hover { color: #ecedee !important; border-left-color: #ecedee !important; }
+
+/* Playground: temporary-workspace indicator and compact guided checklist */
+.temp-chip { min-height: 32px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #3d3320; border-radius: 7px; background: #1a1712; color: #e6d3a8; font-size: 12px; white-space: nowrap; }
+.temp-chip time { font-family: var(--font-code); }
+.save-workspace { min-height: 32px; padding-inline: 12px; font-size: 12.5px; }
+.guide { margin-bottom: 20px; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.guide-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.guide-summary { margin-top: 3px; font-size: 13px; }
+.guide-body { display: flex; flex-direction: column; gap: 10px; }
+.guide-templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 8px; }
+.guide-templates .mini-button { justify-self: start; }
+.guide-steps { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 6px 16px; }
+.guide-steps li { display: flex; align-items: flex-start; gap: 9px; padding: 6px 0; font-size: 12.5px; line-height: 1.45; }
+.guide-steps li strong { display: block; font-size: 13px; font-weight: 600; }
+.guide-steps li .dim { display: block; overflow-wrap: anywhere; }
+.guide-steps li .mini-button { flex: none; margin-top: 1px; text-decoration: none; }
+.guide-icon { flex: none; width: 22px; height: 22px; margin-top: 1px; display: grid; place-items: center; border: 1px solid #3a3d43; border-radius: 50%; color: var(--dim); }
+.guide-steps li[data-state="done"] .guide-icon { border-color: #2c5a3e; background: #1f3a2a; color: var(--success); }
+.guide-steps li[data-state="in_progress"] .guide-icon { border-color: #2d4a66; color: #8cc4ff; }
+.guide-steps li[data-state="attention"] .guide-icon { border-color: #5a4a2a; background: #1a1712; color: var(--warning); }
+.guide-details summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.guide-details ul { margin: 8px 0 0; padding-left: 18px; color: #c4c8ce; font-size: 12.5px; line-height: 1.55; }
+.spin { animation: pd-spin 1.2s linear infinite; }
+@keyframes pd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.temp-label-short { display: none; }
+/* Narrow screens keep the full label for screen readers and show a short one. */
+@media (max-width: 1100px) { .temp-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; } .temp-label-short { display: inline; } }
+@media (max-width: 520px) { .temp-label-short { display: none; } .save-workspace { padding-inline: 10px; } }
+.playground-cta { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; line-height: 1.55; }

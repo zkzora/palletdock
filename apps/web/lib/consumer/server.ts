@@ -81,12 +81,17 @@ export function publicConfig(c: ConsumerConfig): PublicConsumerConfig {
   return { projectId: c.projectId, event: c.event, contract: c.contract ?? null, apiOrigin: new URL(c.apiUrl).origin, keyPrefix: c.readKey.split('.')[0], source: c.source };
 }
 
-/** Private demos follow the workspace's own auth and answer only a signed-in owner session. */
+/**
+ * Private demos follow the workspace's own auth and answer only a signed-in account session.
+ * A temporary playground guest is authenticated too, but is not the operator: it reads as anonymous.
+ */
 export async function ownerSession(cookie: string | null, apiUrl: string, fetchImpl: typeof fetch = fetch): Promise<'owner' | 'anonymous' | 'unreachable'> {
   if (!cookie) return 'anonymous';
   try {
     const r = await fetchImpl(`${apiUrl.replace(/\/$/, '')}/auth/me`, { headers: { cookie }, signal: AbortSignal.timeout(10_000) });
-    return r.status === 200 ? 'owner' : 'anonymous';
+    if (r.status !== 200) return 'anonymous';
+    const body = (await r.json().catch(() => null)) as { session?: { kind?: string } } | null;
+    return body?.session?.kind === 'account' ? 'owner' : 'anonymous';
   } catch {
     return 'unreachable';
   }

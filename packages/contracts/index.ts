@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+export * from './playground.js';
+
 export interface SampleArtifact {
   id: string;
   title: string;

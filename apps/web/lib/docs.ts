@@ -83,7 +83,7 @@ export const DOCS: Doc[] = [
       ['p', 'The first workflow is deliberately concrete: deploy a contract, execute one write that emits an event, retain its receipt, index that event, and return it through a project API.'],
       ['h', 'Requirements'],
       ['bullets', [
-        'A testnet-only EVM wallet you control (for example MetaMask).',
+        'A testnet-only MetaMask wallet you control. MetaMask is the tested wallet; Rabby and some other EVM wallets do not support Portaldot V3 and can fail when adding the network or signing.',
         'Access to the Portaldot V3 endpoints.',
         'Test tokens at the correct funding destination.',
         'A running PalletDock: PostgreSQL, API, worker, and web app (below).',

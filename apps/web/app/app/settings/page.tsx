@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { NETWORK } from '@/lib/network';
 
 export default function SettingsPage() {
-  const { project, projectId, readOnly, request, reloadProjects, href } = useWorkspace();
+  const { project, projectId, readOnly, request, reloadProjects, href, guest } = useWorkspace();
   const toast = useToast();
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
@@ -120,6 +120,20 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
+      {guest ? (
+        <section className="card form-card">
+          <h2 style={{ margin: 0, fontSize: 14 }}>Temporary workspace</h2>
+          <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>
+            This project stops its indexer source and revokes its read key by itself when the temporary workspace expires, so archiving is not needed. Save the workspace as an account to keep it and to
+            archive or restore projects. Contracts and transactions on the testnet are never changed by PalletDock.
+          </p>
+          <div>
+            <Link className="button secondary" href="/signup?save=1">
+              Save workspace
+            </Link>
+          </div>
+        </section>
+      ) : (
       <section className="card form-card" style={{ borderColor: '#3a2a2a' }}>
         <h2 style={{ margin: 0, fontSize: 14 }}>{readOnly ? 'Restore project' : 'Archive project'}</h2>
         <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>
@@ -138,6 +152,7 @@ export default function SettingsPage() {
           </Notice>
         )}
       </section>
+      )}
       {confirm && (
         <Modal
           title={confirm === 'archive' ? 'Archive project' : 'Restore project'}

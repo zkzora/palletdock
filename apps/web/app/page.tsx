@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { PlaygroundOr } from '@/components/playground-cta';
 import './landing.css';
 import { useHeroParallax, useScrolledHeader, useSpotlight } from '@/components/motion';
 import { ProductShowcase } from '@/components/landing/product-showcase';
@@ -45,6 +46,13 @@ export default function LandingPage() {
             <Link href="/faq" className="muted nav-secondary" style={{ textDecoration: 'none' }}>
               FAQ
             </Link>
+            <PlaygroundOr
+              playground={
+                <Link href="/playground" className="button secondary" style={{ minHeight: 34, paddingInline: 14 }}>
+                  Try Playground
+                </Link>
+              }
+            />
             <Link href="/login" className="button" style={{ minHeight: 34, paddingInline: 14 }}>
               Open workspace
             </Link>
@@ -69,9 +77,23 @@ export default function LandingPage() {
               Follow each transaction from your wallet to its receipt, its indexed event, and the API your app reads, with network identity, coverage, freshness, and finality stated, including when they are unknown.
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <Link href="/login" className="button arrow-link">
-                Open the workspace <span className="arrow" aria-hidden="true">→</span>
-              </Link>
+              <PlaygroundOr
+                playground={
+                  <>
+                    <Link href="/playground" className="button arrow-link">
+                      Try Playground <span className="arrow" aria-hidden="true">→</span>
+                    </Link>
+                    <Link href="/login" className="button secondary">
+                      Open the workspace
+                    </Link>
+                  </>
+                }
+                fallback={
+                  <Link href="/login" className="button arrow-link">
+                    Open the workspace <span className="arrow" aria-hidden="true">→</span>
+                  </Link>
+                }
+              />
               <Link href="/docs" className="button secondary">
                 Read the docs
               </Link>

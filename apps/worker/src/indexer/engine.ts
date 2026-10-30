@@ -159,7 +159,9 @@ export class IndexerEngine {
          SELECT j.source_id FROM indexer_jobs j
            JOIN indexer_sources s ON s.id=j.source_id
            JOIN projects p ON p.id=s.project_id
+           JOIN owners o ON o.id=p.owner_id
           WHERE s.desired_state='running' AND p.archived_at IS NULL
+            AND (o.kind <> 'guest' OR o.guest_expires_at > now())
             AND s.status NOT IN ('recovery_required','completed','stopped')
             AND j.next_run_at <= now()
             AND (j.lease_expires_at IS NULL OR j.lease_expires_at < now())
@@ -202,12 +204,16 @@ export class IndexerEngine {
     return r.rows[0];
   }
 
-  /** Lock the job+source rows and verify the lease/generation still belong to this claim. */
+  /**
+   * Lock the job+source rows and verify the lease/generation still belong to this claim.
+   * A temporary guest workspace that expired mid-claim fences the commit too, before maintenance runs.
+   */
   private async fence(c: pg.PoolClient, claim: Claim): Promise<void> {
     const r = await c.query(
-      `SELECT 1 FROM indexer_jobs j JOIN indexer_sources s ON s.id=j.source_id JOIN projects p ON p.id=s.project_id
+      `SELECT 1 FROM indexer_jobs j JOIN indexer_sources s ON s.id=j.source_id JOIN projects p ON p.id=s.project_id JOIN owners o ON o.id=p.owner_id
         WHERE j.source_id=$1 AND j.lease_token=$2 AND j.lease_expires_at > now()
           AND s.generation=$3::bigint AND s.desired_state='running' AND p.archived_at IS NULL
+          AND (o.kind <> 'guest' OR o.guest_expires_at > now())
         FOR UPDATE OF j, s`,
       [claim.sourceId, claim.leaseToken, claim.generation],
     );
@@ -254,7 +260,7 @@ export class IndexerEngine {
       return await this.advance(claim, src);
     } catch (e) {
       if (e instanceof FencedError) {
-        await this.opsLog(src.project_id, src.id, 'WARN', 'Indexer commit discarded: lease or generation changed (paused, archived, or reclaimed).', { generation: claim.generation });
+        await this.opsLog(src.project_id, src.id, 'WARN', 'Indexer commit discarded: lease or generation changed (paused, archived, workspace expired, or reclaimed).', { generation: claim.generation });
         return { kind: 'fenced', sourceId: src.id };
       }
       if (isPrunedStateError(e)) {

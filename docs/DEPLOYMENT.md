@@ -83,6 +83,25 @@ PALLETDOCK_SIGNUP_INVITE_CODE=<random value, at least 16 characters>
 PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES=5
 ```
 
+### Playground (temporary workspaces)
+
+Public guest creation is off unless the API service sets the flag. All values are read by the API only; nothing is configured in Vercel or as `NEXT_PUBLIC_*`:
+
+```text
+PALLETDOCK_PLAYGROUND_ENABLED=1                  # default 0 (disabled)
+PALLETDOCK_PLAYGROUND_LIFETIME_MINUTES=360       # fixed lifetime, 15–1440, never extended by activity
+PALLETDOCK_PLAYGROUND_CAPACITY=100               # unexpired guest workspaces at once
+PALLETDOCK_PLAYGROUND_STARTS_PER_HOUR=3          # per visitor address (needs PALLETDOCK_PROXY_SECRET behind the web proxy)
+PALLETDOCK_PLAYGROUND_MAX_CONTRACTS=2
+PALLETDOCK_PLAYGROUND_MAX_INDEXER_SOURCES=1
+PALLETDOCK_PLAYGROUND_MAX_READ_KEYS=1
+PALLETDOCK_PLAYGROUND_MAX_ACTIONS=150            # mutating or RPC-backed workspace requests per guest
+```
+
+It needs migration `0004_guest_playground.sql` (applied by the normal pre-deploy migration) and a worker built from the same commit: the worker skips expired guests when claiming indexer work and polling receipts, and runs the expiry maintenance pass. Without `PALLETDOCK_PROXY_SECRET` on both services, every visitor shares the proxy's address for the start limit. Saving a temporary workspace uses the signup mode below; with `PALLETDOCK_SIGNUP_MODE=disabled`, guests are told that saving is unavailable. See [PLAYGROUND.md](PLAYGROUND.md).
+
+Acceptance after enabling: `GET /auth/playground-config` shows `enabled: true`; opening `/playground` sets no cookie; **Start temporary workspace** opens `/app` with the *Temporary playground* indicator.
+
 Redeploy the API after changing these values. Users then create isolated accounts at `/signup`; the invite code is sent only to intended testers and is never configured in Vercel or a `NEXT_PUBLIC_*` variable. `PALLETDOCK_SIGNUP_MODE=open` is supported but is not recommended until the deployment also has CAPTCHA, resource quotas, and abuse monitoring. `disabled` remains the default.
 
 ## 3. Vercel

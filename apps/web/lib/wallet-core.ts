@@ -12,6 +12,29 @@ export interface Eip1193 {
   removeListener?(event: string, fn: (...args: any[]) => void): void;
 }
 
+// Wallets that also set isMetaMask for compatibility, checked before it.
+const OTHER_WALLETS: [flag: string, name: string][] = [
+  ['isRabby', 'Rabby'],
+  ['isBraveWallet', 'Brave Wallet'],
+  ['isCoinbaseWallet', 'Coinbase Wallet'],
+  ['isOkxWallet', 'OKX Wallet'],
+  ['isOKExWallet', 'OKX Wallet'],
+  ['isTrust', 'Trust Wallet'],
+  ['isPhantom', 'Phantom'],
+  ['isZerion', 'Zerion'],
+  ['isTalisman', 'Talisman'],
+  ['isSubWallet', 'SubWallet'],
+  ['isFrame', 'Frame'],
+];
+
+/** Best-effort name of the injected wallet: 'MetaMask', another known wallet, or null when it does not say. */
+export function detectWallet(eth: Eip1193 | null): string | null {
+  if (!eth) return null;
+  const flags = eth as unknown as Record<string, unknown>;
+  for (const [flag, name] of OTHER_WALLETS) if (flags[flag] === true) return name;
+  return flags.isMetaMask === true ? 'MetaMask' : null;
+}
+
 export type SendOutcome =
   | { outcome: 'submitted'; hash: string }
   | { outcome: 'rejected'; error: string }

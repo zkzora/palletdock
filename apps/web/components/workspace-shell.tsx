@@ -4,18 +4,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Activity, Braces, ChevronDown, FileText, Gauge, KeyRound, LogOut, Menu, PanelsTopLeft, Settings, TerminalSquare, X } from 'lucide-react';
-import { api } from '@/lib/api';
-import type { Owner, Project } from '@/lib/types';
+import { Activity, Braces, ChevronDown, Clock, FileText, Gauge, KeyRound, LogOut, Menu, PanelsTopLeft, Settings, TerminalSquare, X } from 'lucide-react';
+import { WORKSPACE_EXPIRED_EVENT, api, type ApiError } from '@/lib/api';
+import type { Owner, Project, SessionInfo } from '@/lib/types';
 import { WalletProvider, useWallet } from '@/lib/wallet';
 import { shortAddr } from '@/lib/format';
 import { CopyButton, Modal, Notice } from '@/components/ui';
 import { useSpotlight } from '@/components/motion';
+import { PlaygroundGuide } from '@/components/playground-guide';
 import { PORTALDOT_ADD_CHAIN_PARAMS } from '@/lib/wallet-core';
 import { NETWORK } from '@/lib/network';
 
 interface WorkspaceValue {
   owner: Owner;
+  /** Account or temporary playground guest; guests get restrictions explained instead of hidden pages. */
+  session: SessionInfo;
+  guest: boolean;
+  /** The EVM RPC is a local fixture chain (labelled FIXTURE NETWORK), not Portaldot. */
+  fixture: boolean;
   csrfToken: string;
   projects: Project[];
   project: Project | null;
@@ -58,9 +64,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const wallet = useWallet();
   const [owner, setOwner] = useState<Owner | null>(null);
+  const [session, setSession] = useState<SessionInfo>({ kind: 'account', expiresAt: null });
   const [csrfToken, setCsrfToken] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'expired'>('loading');
+  const [endSession, setEndSession] = useState(false);
   const [message, setMessage] = useState('');
   const [navOpen, setNavOpen] = useState(false);
   const [signerOpen, setSignerOpen] = useState(false);
@@ -74,13 +82,18 @@ function Shell({ children }: { children: React.ReactNode }) {
   const bootstrap = useCallback(async () => {
     setStatus('loading');
     try {
-      const me = await api<{ owner: Owner; csrfToken: string }>('/auth/me');
+      const me = await api<{ owner: Owner; session: SessionInfo; csrfToken: string }>('/auth/me');
       setOwner(me.owner);
+      setSession(me.session);
       setCsrfToken(me.csrfToken);
       await reloadProjects();
       setStatus('ready');
     } catch (error) {
-      if ((error as Error & { status?: number }).status === 401) {
+      if ((error as ApiError).code === 'WORKSPACE_EXPIRED') {
+        setStatus('expired');
+        return;
+      }
+      if ((error as ApiError).status === 401) {
         router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         return;
       }
@@ -93,6 +106,18 @@ function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+  useEffect(() => {
+    const onExpired = () => setStatus('expired');
+    window.addEventListener(WORKSPACE_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(WORKSPACE_EXPIRED_EVENT, onExpired);
+  }, []);
+  // A temporary workspace ends at its fixed expiry; the page follows without waiting for a failed request.
+  useEffect(() => {
+    if (status !== 'ready' || session.kind !== 'guest' || !session.expiresAt) return;
+    const ms = new Date(session.expiresAt).getTime() - Date.now();
+    const t = setTimeout(() => setStatus('expired'), Math.max(0, ms));
+    return () => clearTimeout(t);
+  }, [status, session]);
   useEffect(() => {
     if (status !== 'ready') return;
     api<{ data: { config: { fixture?: boolean } } }>('/workspace/network')
@@ -113,6 +138,9 @@ function Shell({ children }: { children: React.ReactNode }) {
       owner
         ? {
             owner,
+            session,
+            guest: session.kind === 'guest',
+            fixture,
             csrfToken,
             projects,
             project,
@@ -124,8 +152,10 @@ function Shell({ children }: { children: React.ReactNode }) {
             openSigner: () => setSignerOpen(true),
           }
         : null,
-    [owner, csrfToken, projects, project, reloadProjects, request, href],
+    [owner, session, fixture, csrfToken, projects, project, reloadProjects, request, href],
   );
+
+  if (status === 'expired') return <ExpiredWorkspace />;
 
   if (status === 'loading' || (!value && status !== 'error'))
     return (
@@ -222,12 +252,13 @@ function Shell({ children }: { children: React.ReactNode }) {
               className="all-projects"
               style={{ width: '100%', border: 0, background: 'transparent' }}
               onClick={async () => {
+                if (value.guest) return setEndSession(true);
                 await request('/auth/logout', { method: 'POST' }).catch(() => {});
                 router.replace('/login');
               }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <LogOut size={15} aria-hidden="true" /> Sign out
+                <LogOut size={15} aria-hidden="true" /> {value.guest ? 'End temporary session' : 'Sign out'}
               </span>
             </button>
             <div className="mono">
@@ -249,6 +280,12 @@ function Shell({ children }: { children: React.ReactNode }) {
               <strong>{crumb}</strong>
             </div>
             <div className="header-actions">
+              {value.guest && session.expiresAt && <TemporaryChip expiresAt={session.expiresAt} />}
+              {value.guest && (
+                <Link className="button secondary save-workspace" href="/signup?save=1">
+                  Save workspace
+                </Link>
+              )}
               <Link className="network-chip" href={href('/app/network')} style={{ textDecoration: 'none' }}>
                 {NETWORK.label} <span className="mono">{NETWORK.chainIdHex}</span>
               </Link>
@@ -268,14 +305,86 @@ function Shell({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <main ref={spotlight} className="workspace-main">
+            {project?.playground && <PlaygroundGuide />}
             <div key={pathname} className="page-enter">
               {children}
             </div>
           </main>
         </div>
         {signerOpen && <SignerDialog onClose={() => setSignerOpen(false)} />}
+        {endSession && (
+          <Modal
+            title="End temporary session"
+            onClose={() => setEndSession(false)}
+            footer={
+              <>
+                <button className="button secondary" onClick={() => setEndSession(false)} data-autofocus>
+                  Keep working
+                </button>
+                <Link className="button secondary" href="/signup?save=1">
+                  Save workspace
+                </Link>
+                <button
+                  className="button danger"
+                  onClick={async () => {
+                    await request('/auth/logout', { method: 'POST' }).catch(() => {});
+                    router.replace('/playground');
+                  }}
+                >
+                  End session
+                </button>
+              </>
+            }
+          >
+            <p style={{ margin: 0, lineHeight: 1.55, color: '#c4c8ce' }}>
+              This temporary workspace has no password. Ending the session (or clearing this browser&apos;s cookies) removes your access to it, and it cannot be reopened. Contracts and transactions you
+              submitted stay on the testnet; PalletDock cannot reverse on-chain actions.
+            </p>
+          </Modal>
+        )}
       </div>
     </WorkspaceContext.Provider>
+  );
+}
+
+function TemporaryChip({ expiresAt }: { expiresAt: string }) {
+  const at = new Date(expiresAt);
+  const label = at.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <span className="temp-chip" title={`Temporary workspace. Off-chain access ends ${label}.`}>
+      <Clock size={13} aria-hidden="true" />
+      <span className="temp-label">Temporary playground · expires</span>
+      <span className="temp-label-short" aria-hidden="true">
+        Temporary · until
+      </span>
+      <time dateTime={expiresAt}>{at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+    </span>
+  );
+}
+
+/** Shown once a temporary workspace's fixed lifetime has ended. */
+function ExpiredWorkspace() {
+  return (
+    <main className="login-page">
+      <section className="login-panel" aria-labelledby="expired-title">
+        <div className="eyebrow">Playground</div>
+        <h1 id="expired-title" className="page-title" style={{ fontSize: 26 }}>
+          This temporary workspace expired
+        </h1>
+        <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>
+          Its off-chain access ended at the fixed expiry: the session and read keys are revoked and its indexer and receipt tracking stopped. Contracts you deployed and transactions you signed remain on
+          the testnet; PalletDock cannot reverse on-chain actions.
+        </p>
+        <div className="form-actions" style={{ marginTop: 0 }}>
+          <Link className="button" href="/playground">
+            Start a new playground
+          </Link>
+          <Link className="button secondary" href="/login">
+            Sign in
+          </Link>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -346,10 +455,16 @@ function SignerDialog({ onClose }: { onClose(): void }) {
       <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>
         Writes are signed in your browser wallet after you review them. PalletDock never asks for a seed phrase or private key, and a connected wallet does not unlock workspace data.
       </p>
-      {!wallet.available && <Notice tone="warning" title="No browser wallet detected">Install an EVM wallet extension (for example MetaMask) to deploy or write. Reads and indexed data work without a wallet.</Notice>}
+      {!wallet.available && <Notice tone="warning" title="No browser wallet detected">Install MetaMask (recommended) to deploy or write. Reads and indexed data work without a wallet.</Notice>}
+      {wallet.available && wallet.walletName !== 'MetaMask' && (
+        <Notice tone={wallet.walletName ? 'warning' : 'info'} title="Use MetaMask">
+          {wallet.walletName ? `${wallet.walletName} detected. ` : ''}
+          PalletDock is tested with MetaMask. Rabby and some other wallets do not support Portaldot V3 (chain 420420777) and can fail when adding the network or signing. If connecting, switching, or signing fails, use MetaMask.
+        </Notice>
+      )}
       {wallet.available && !wallet.account && (
         <button className="choice" onClick={() => void wallet.connect()} disabled={wallet.connecting} data-autofocus>
-          <strong>{wallet.connecting ? 'Waiting for the wallet…' : 'Connect EVM wallet'}</strong>
+          <strong>{wallet.connecting ? 'Waiting for the wallet…' : wallet.walletName === 'MetaMask' ? 'Connect MetaMask' : 'Connect EVM wallet'}</strong>
           <span className="mono dim" style={{ fontSize: 12 }}>
             Requests account access only (eth_requestAccounts)
           </span>

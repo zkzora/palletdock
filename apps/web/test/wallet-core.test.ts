@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectWithTimeout, isUnknownChainError, sendWithProvider, switchOrAddChain, type Eip1193 } from '../lib/wallet-core';
+import { connectWithTimeout, detectWallet, isUnknownChainError, sendWithProvider, switchOrAddChain, type Eip1193 } from '../lib/wallet-core';
 
 const FROM = '0x7a3f09c2d4e81b6a5f3c90e7d12b48a6e0f9c315';
 const HASH = '0x' + 'ab'.repeat(32);
@@ -157,3 +157,16 @@ describe('connect with timeout', () => {
   });
 });
 
+
+describe('detectWallet', () => {
+  const eth = (flags: Record<string, boolean>) => ({ request: async () => null, ...flags }) as Eip1193;
+  it('names MetaMask only when no other wallet flag is set', () => {
+    expect(detectWallet(eth({ isMetaMask: true }))).toBe('MetaMask');
+    expect(detectWallet(eth({ isMetaMask: true, isRabby: true }))).toBe('Rabby');
+    expect(detectWallet(eth({ isMetaMask: true, isBraveWallet: true }))).toBe('Brave Wallet');
+  });
+  it('returns null for a provider without flags or no provider', () => {
+    expect(detectWallet(eth({}))).toBeNull();
+    expect(detectWallet(null)).toBeNull();
+  });
+});

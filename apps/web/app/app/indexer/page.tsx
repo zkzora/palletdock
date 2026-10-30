@@ -394,7 +394,8 @@ function SourceForm({ contracts, replace, onCancel, onSaved }: { contracts: Arra
         </p>
         {errs.form && <Notice tone="danger">{errs.form}</Notice>}
         <div className="form-actions" style={{ marginTop: 0 }}>
-          <button className="button" onClick={() => void save()} disabled={busy} aria-busy={busy}>
+          {/* Wait for the contract's events and deployment block before validating, so a fast click never saves stale defaults. */}
+          <button className="button" onClick={() => void save()} disabled={busy || !detail.data} aria-busy={busy || !detail.data}>
             {busy ? 'Saving…' : 'Save and start indexing'}
           </button>
           <button className="button secondary" onClick={onCancel}>

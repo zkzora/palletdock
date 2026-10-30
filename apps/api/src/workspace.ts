@@ -44,8 +44,10 @@ import {
   validateArtifact,
   type PortaldotNetworkConfig,
 } from '@palletdock/shared';
-import { sampleArtifacts } from '@palletdock/contracts';
-import { activeFingerprint, activeUnitPolicy, fail, isUuid, param, UNIT_SOURCE_COLUMNS, workspaceGuard } from './context.js';
+import { playgroundTemplate, resolvedTemplate, sampleArtifacts } from '@palletdock/contracts';
+import { PLAYGROUND_TEMPLATE_IDS } from '@palletdock/shared';
+import { activeFingerprint, activeUnitPolicy, fail, guestRestricted, isUuid, lockProject, param, QuotaError, UNIT_SOURCE_COLUMNS, workspaceGuard, type SessionAuth } from './context.js';
+import { assertContractQuota, assertSourceQuota, keyExpirySql } from './playground.js';
 
 export interface WorkspaceDeps {
   network?: PortaldotNetworkConfig;
@@ -238,6 +240,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     const address = getAddress(parsed.data.address).toLowerCase();
     try {
       const out = await withTx(pool, async (c) => {
+        await lockProject(c, g.project.id);
+        await assertContractQuota(c, g.auth, g.project.id);
         const ct = await c.query(
           `INSERT INTO contracts(project_id,fingerprint_id,name,address,source,deploy_tx_hash,deploy_block,code_observed)
            VALUES ($1,$2,$3,$4,'imported',$5,$6,$7) RETURNING id`,
@@ -258,6 +262,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       });
       return reply.code(201).send({ data: { id: out, address, codeObservedAtBlock: observedBlock, note: 'ABI attached. This is not source verification and does not prove ownership.' } });
     } catch (e) {
+      if (e instanceof QuotaError) return fail(reply, 'LIMIT_REACHED', e.message);
       if ((e as { code?: string }).code === '23505') return fail(reply, 'CONFLICT', 'This contract address is already tracked in this project.');
       throw e;
     }
@@ -352,7 +357,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
   });
 
   app.post(`${P}/contracts/:contractId/read`, async (request, reply) => {
-    const g = await workspaceGuard(pool, request, reply);
+    // Not a mutation, but an RPC call: guests spend from their action budget.
+    const g = await workspaceGuard(pool, request, reply, { guestBudget: true });
     if (!g) return;
     const c = await contractOf(g.project.id, param(request, 'contractId'));
     if (!c) return fail(reply, 'NOT_FOUND', 'Contract not found in this project.');
@@ -380,6 +386,15 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     }
     try {
       const decoded = decodeFunctionResult({ abi: [fn], functionName: fn.name, data: raw });
+      if (g.project.playground) {
+        // Guided checklist: a successful, decoded eth_call observed by this server.
+        await pool.query(
+          `UPDATE projects SET playground_progress = jsonb_set(playground_progress, '{reads}',
+                  COALESCE(playground_progress->'reads','{}'::jsonb) || jsonb_build_object($2::text, jsonb_build_object('function',$3::text,'blockNumber',$4::text,'at',now())), true)
+            WHERE id=$1`,
+          [g.project.id, c.id, signatureOf(fn), block],
+        );
+      }
       return { data: { ok: true, function: signatureOf(fn), outputs: fn.outputs, result: toLosslessJson(decoded), raw, blockNumber: block, observedAt: new Date().toISOString() } };
     } catch (e) {
       return { data: { ok: false, function: signatureOf(fn), error: `Return data does not match the ABI: ${(e as Error).message.split('\n')[0]}`, raw, blockNumber: block } };
@@ -513,6 +528,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
   app.post(`${P}/artifacts`, async (request, reply) => {
     const g = await workspaceGuard(pool, request, reply, { mutate: true });
     if (!g) return;
+    if (guestRestricted(g.auth, reply, 'A temporary workspace deploys the bundled templates only. Save the workspace as an account to upload your own artifacts.')) return;
     const b = body(request);
     const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
     let raw = b.artifact;
@@ -569,12 +585,24 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       storageDeposit({ kind: 'instantiate', from, input: '0x', code: art.creation_bytecode, value }),
     ]);
     const revert = fee.status === 'failed' ? decodeRevert(abi, fee.revertData ?? null) : null;
-    const tx = await pool.query(
-      `INSERT INTO transactions(project_id,fingerprint_id,artifact_id,origin,kind,from_address,to_address,input,value_raw,function_name,decoded_args,submission_status,estimates)
-       VALUES ($1,$2,$3,'palletdock','deploy',$4,NULL,$5,$6,'constructor',$7,'prepared',$8) RETURNING id`,
-      [g.project.id, fp.id, art.id, from.toLowerCase(), data, value.toString(), JSON.stringify(toLosslessJson(args)), JSON.stringify({ fee, storageDeposit: deposit, revert })],
-    );
-    await pool.query(`INSERT INTO transaction_observations(transaction_id,stage,detail,source) VALUES ($1,'prepared','Deployment prepared for wallet review.','api')`, [tx.rows[0].id]);
+    let tx: pg.QueryResult;
+    try {
+      tx = await withTx(pool, async (c) => {
+        // A guest's contract quota counts prepared deployments too, checked under the project lock.
+        await lockProject(c, g.project.id);
+        await assertContractQuota(c, g.auth, g.project.id);
+        const ins = await c.query(
+          `INSERT INTO transactions(project_id,fingerprint_id,artifact_id,origin,kind,from_address,to_address,input,value_raw,function_name,decoded_args,submission_status,estimates)
+           VALUES ($1,$2,$3,'palletdock','deploy',$4,NULL,$5,$6,'constructor',$7,'prepared',$8) RETURNING id`,
+          [g.project.id, fp.id, art.id, from.toLowerCase(), data, value.toString(), JSON.stringify(toLosslessJson(args)), JSON.stringify({ fee, storageDeposit: deposit, revert })],
+        );
+        await c.query(`INSERT INTO transaction_observations(transaction_id,stage,detail,source) VALUES ($1,'prepared','Deployment prepared for wallet review.','api')`, [ins.rows[0].id]);
+        return ins;
+      });
+    } catch (e) {
+      if (e instanceof QuotaError) return fail(reply, 'LIMIT_REACHED', e.message);
+      throw e;
+    }
     return {
       data: {
         transactionId: tx.rows[0].id,
@@ -599,7 +627,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
   }
 
   app.post(`${P}/transactions/:txId/submission`, async (request, reply) => {
-    const g = await workspaceGuard(pool, request, reply, { mutate: true, allowArchived: true });
+    // Recording a wallet result must always succeed, so it does not spend the guest action budget.
+    const g = await workspaceGuard(pool, request, reply, { mutate: true, allowArchived: true, guestBudget: false });
     if (!g) return;
     const t = await txOf(g.project.id, param(request, 'txId'));
     if (!t) return fail(reply, 'NOT_FOUND', 'Transaction not found.');
@@ -879,28 +908,44 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     return { data: { sources: r.rows, recentRecords: records.rows, devControls } };
   });
 
-  app.post(`${P}/indexer/sources`, async (request, reply) => {
-    const g = await workspaceGuard(pool, request, reply, { mutate: true });
-    if (!g) return;
-    const parsed = indexerSourceSchema.safeParse(request.body);
-    if (!parsed.success) return fail(reply, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid indexer configuration.');
+  /**
+   * Validate and create one log source (shared by the Indexer page and the playground guide).
+   * The start block must still be served by the node; it is never moved silently. A guest's
+   * source quota is checked under the project lock, after any replaced source is stopped.
+   * With reuseExisting, an active source of the same contract that already covers the first
+   * event is returned instead (checked under the same lock, so parallel calls create one source).
+   * Sends the failure response itself and returns null on error.
+   */
+  async function createSource(
+    g: { auth: SessionAuth; project: Record<string, any> },
+    reply: FastifyReply,
+    input: { contractId: string; events: string[]; startBlock: string; endBlock?: string; replaceSourceId?: string | null; reuseExisting?: boolean },
+  ): Promise<{ id: string; existing: boolean } | null> {
     const fp = await requireFingerprint(reply);
-    if (!fp) return;
-    const c = await contractOf(g.project.id, parsed.data.contractId);
-    if (!c || c.removed_at) return fail(reply, 'NOT_FOUND', 'Contract not found in this project.');
-    if (c.fingerprint_id !== fp.id) return fail(reply, 'CONFLICT', 'This contract was tracked on a different network identity. Re-import it on the current network.');
+    if (!fp) return null;
+    const c = await contractOf(g.project.id, input.contractId);
+    if (!c || c.removed_at) return (fail(reply, 'NOT_FOUND', 'Contract not found in this project.'), null);
+    if (c.fingerprint_id !== fp.id) return (fail(reply, 'CONFLICT', 'This contract was tracked on a different network identity. Re-import it on the current network.'), null);
     const abiEvents = eventsOf(c.abi as Abi);
-    const selected = parsed.data.events.map((n) => abiEvents.find((e) => e.name === n || signatureOf(e) === n));
-    if (selected.some((e) => !e)) return fail(reply, 'INVALID_REQUEST', 'Every selected event must exist in the attached ABI.');
-    const start = BigInt(parsed.data.startBlock);
-    const end = parsed.data.endBlock ? BigInt(parsed.data.endBlock) : null;
-    if (end !== null && end < start) return fail(reply, 'INVALID_REQUEST', 'End block must be at least the start block.');
-    if (c.deploy_block && start < BigInt(c.deploy_block)) return fail(reply, 'INVALID_REQUEST', `Start block is before the recorded deployment block ${c.deploy_block}.`);
+    const selected = input.events.map((n) => abiEvents.find((e) => e.name === n || signatureOf(e) === n));
+    if (selected.some((e) => !e)) return (fail(reply, 'INVALID_REQUEST', 'Every selected event must exist in the attached ABI.'), null);
+    const start = BigInt(input.startBlock);
+    const end = input.endBlock ? BigInt(input.endBlock) : null;
+    if (end !== null && end < start) return (fail(reply, 'INVALID_REQUEST', 'End block must be at least the start block.'), null);
+    if (c.deploy_block && start < BigInt(c.deploy_block)) return (fail(reply, 'INVALID_REQUEST', `Start block is before the recorded deployment block ${c.deploy_block}.`), null);
     // The indexer verifies block ancestry, so the start block must still be served by the node.
     const availabilityError = await startBlockAvailabilityError(start);
-    if (availabilityError) return fail(reply, availabilityError.code, availabilityError.message);
-    const replaces = typeof body(request).replaceSourceId === 'string' ? String(body(request).replaceSourceId) : null;
+    if (availabilityError) return (fail(reply, availabilityError.code, availabilityError.message), null);
+    const replaces = input.replaceSourceId ?? null;
     const id = await withTx(pool, async (tx) => {
+      await lockProject(tx, g.project.id);
+      if (input.reuseExisting) {
+        const found = await tx.query(
+          `SELECT id FROM indexer_sources WHERE project_id=$1 AND contract_id=$2 AND desired_state <> 'deleted' AND $3 = ANY(event_names) ORDER BY created_at DESC LIMIT 1`,
+          [g.project.id, c.id, selected[0]!.name],
+        );
+        if (found.rowCount) return { id: found.rows[0].id as string, existing: true };
+      }
       if (replaces) {
         if (!isUuid(replaces)) throw new ValidationError('Invalid source to replace.');
         const u = await tx.query(
@@ -909,6 +954,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         );
         if (!u.rowCount) throw new ValidationError('The source to replace was not found.');
       }
+      await assertSourceQuota(tx, g.auth, g.project.id);
       const s = await tx.query(
         `INSERT INTO indexer_sources(project_id,contract_id,fingerprint_id,abi_version_id,contract_address,event_names,event_topics,start_block,end_block)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
@@ -920,13 +966,25 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         JSON.stringify({ contract: c.address, events: selected.map((e) => signatureOf(e!)), startBlock: start.toString(), endBlock: end?.toString() ?? null, replaces }),
         s.rows[0].id,
       ]);
-      return s.rows[0].id as string;
+      return { id: s.rows[0].id as string, existing: false };
     }).catch((e) => {
-      if (e instanceof ValidationError) return e;
+      if (e instanceof ValidationError || e instanceof QuotaError) return e;
       throw e;
     });
-    if (id instanceof ValidationError) return fail(reply, 'INVALID_REQUEST', id.message);
-    return reply.code(201).send({ data: { id } });
+    if (id instanceof QuotaError) return (fail(reply, 'LIMIT_REACHED', id.message), null);
+    if (id instanceof ValidationError) return (fail(reply, 'INVALID_REQUEST', id.message), null);
+    return id;
+  }
+
+  app.post(`${P}/indexer/sources`, async (request, reply) => {
+    const g = await workspaceGuard(pool, request, reply, { mutate: true });
+    if (!g) return;
+    const parsed = indexerSourceSchema.safeParse(request.body);
+    if (!parsed.success) return fail(reply, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid indexer configuration.');
+    const replaceSourceId = typeof body(request).replaceSourceId === 'string' ? String(body(request).replaceSourceId) : null;
+    const created = await createSource(g, reply, { ...parsed.data, replaceSourceId });
+    if (!created) return;
+    return reply.code(201).send({ data: { id: created.id } });
   });
 
   const lifecycle = async (request: FastifyRequest, reply: FastifyReply, action: 'pause' | 'resume' | 'reconnect' | 'reindex' | 'simulate-failure' | 'delete') => {
@@ -1174,8 +1232,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       const secret = `${prefix}.${randomToken(32)}`;
       const days = Math.max(1, Math.round((new Date(old.expires_at).getTime() - new Date(old.created_at).getTime()) / 86_400_000));
       const k = await c.query(
-        `INSERT INTO api_keys(project_id,name,prefix,secret_hash,scopes,expires_at) VALUES ($1,$2,$3,$4,$5,now()+($6::text||' days')::interval) RETURNING id,name,prefix,scopes,created_at,expires_at`,
-        [g.project.id, old.name, prefix, sha256Hex(secret), old.scopes, days],
+        `INSERT INTO api_keys(project_id,name,prefix,secret_hash,scopes,expires_at) VALUES ($1,$2,$3,$4,$5,${keyExpirySql(g.auth, '$6', '$7')}) RETURNING id,name,prefix,scopes,created_at,expires_at`,
+        [g.project.id, old.name, prefix, sha256Hex(secret), old.scopes, days, ...(g.auth.kind === 'guest' ? [g.auth.guestExpiresAt] : [])],
       );
       await c.query(`UPDATE api_keys SET revoked_at=now(), replaced_by=$2 WHERE id=$1`, [keyId, k.rows[0].id]);
       return { key: k.rows[0], secret };
@@ -1183,4 +1241,267 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
     if (!out) return fail(reply, 'NOT_FOUND', 'Active key not found.');
     return reply.code(201).send({ data: out.key, secret: out.secret, secretShownOnce: true, replaced: keyId });
   });
+
+  registerPlaygroundGuide();
+
+  // ================================================================ playground guide
+  /**
+   * The guided checklist is derived from records this server or its worker observed:
+   * the deployment receipt, a decoded eth_call, the write's receipt, the indexed and
+   * decoded event, and a successful /v1 events request. Clicking a button never
+   * completes a step.
+   */
+  function registerPlaygroundGuide() {
+    const noGuide = (reply: FastifyReply) => fail(reply, 'NOT_FOUND', 'This project has no playground guide.');
+
+    app.get(`${P}/playground`, async (request, reply) => {
+      const g = await workspaceGuard(pool, request, reply);
+      if (!g) return;
+      if (!g.project.playground) return noGuide(reply);
+      const pid = g.project.id as string;
+      const tpl = playgroundTemplate(g.project.playground_template);
+      const progress = (g.project.playground_progress ?? {}) as { reads?: Record<string, { function: string; blockNumber: string; at: string }> };
+      if (!tpl) return { data: { template: null, contract: null, deploy: null, read: null, interaction: null, source: null, event: null, apiQuery: null, steps: guideSteps(null) } };
+
+      const [contractRow, deployRow] = await Promise.all([
+        pool.query(
+          `SELECT c.id,c.name,c.address,c.deploy_block::text AS deploy_block,c.deploy_tx_hash,c.created_at
+             FROM contracts c JOIN artifacts a ON a.id=c.artifact_id
+            WHERE c.project_id=$1 AND c.removed_at IS NULL AND c.source='deployed' AND a.provenance='bundled-sample' AND a.contract_name=$2
+            ORDER BY c.created_at DESC LIMIT 1`,
+          [pid, tpl.contractName],
+        ),
+        pool.query(
+          `SELECT t.id,t.hash,t.submission_status,t.inclusion_status,t.execution_status,t.tracking_status,t.contract_id,t.error_message,t.created_at
+             FROM transactions t JOIN artifacts a ON a.id=t.artifact_id
+            WHERE t.project_id=$1 AND t.kind='deploy' AND a.provenance='bundled-sample' AND a.contract_name=$2 AND t.submission_status <> 'prepared'
+            ORDER BY t.created_at DESC LIMIT 1`,
+          [pid, tpl.contractName],
+        ),
+      ]);
+      const contract = contractRow.rows[0] ?? null;
+      const deploy = deployRow.rows[0] ?? null;
+      let interaction: Record<string, any> | null = null;
+      let source: Record<string, any> | null = null;
+      let event: Record<string, any> | null = null;
+      let apiQuery: Record<string, any> | null = null;
+      if (contract) {
+        const [ix, src] = await Promise.all([
+          pool.query(
+            `SELECT id,hash,submission_status,inclusion_status,execution_status,indexing_status,error_message,block_number::text AS block_number,created_at
+               FROM transactions WHERE project_id=$1 AND contract_id=$2 AND kind='call' AND function_name=$3 AND submission_status <> 'prepared'
+              ORDER BY (execution_status='success') DESC, created_at DESC LIMIT 1`,
+            [pid, contract.id, tpl.write.function],
+          ),
+          pool.query(
+            `SELECT s.id,s.status,s.desired_state,s.start_block::text AS start_block,s.last_error,s.latest_observed_block::text AS latest_observed_block,
+                    ck.block_number::text AS checkpoint_block,ck.committed_at AS checkpoint_at
+               FROM indexer_sources s LEFT JOIN indexer_checkpoints ck ON ck.source_id=s.id
+              WHERE s.project_id=$1 AND s.contract_id=$2 AND s.desired_state <> 'deleted' AND $3 = ANY(s.event_names)
+              ORDER BY s.created_at DESC LIMIT 1`,
+            [pid, contract.id, tpl.event.name],
+          ),
+        ]);
+        interaction = ix.rows[0] ?? null;
+        source = src.rows[0] ?? null;
+        if (interaction?.hash && interaction.execution_status === 'success') {
+          event =
+            (
+              await pool.query(
+                `SELECT r.block_number::text AS block_number,r.transaction_hash,r.log_index,d.event_name,d.args,r.indexed_at
+                   FROM raw_logs r JOIN decoded_events d ON d.raw_log_id=r.id JOIN indexer_sources s ON s.id=r.source_id
+                  WHERE r.project_id=$1 AND r.canonical AND s.contract_id=$2 AND d.status='decoded' AND d.event_name=$3 AND lower(r.transaction_hash)=lower($4)
+                  ORDER BY r.seq DESC LIMIT 1`,
+                [pid, contract.id, tpl.event.name, interaction.hash],
+              )
+            ).rows[0] ?? null;
+        }
+        if (event) {
+          apiQuery =
+            (
+              await pool.query(
+                `SELECT request_id,created_at FROM request_logs
+                  WHERE project_id=$1 AND auth_kind='api_key' AND status=200 AND route='/v1/projects/:projectId/events' AND created_at >= $2
+                  ORDER BY created_at DESC LIMIT 1`,
+                [pid, event.indexed_at],
+              )
+            ).rows[0] ?? null;
+        }
+      }
+      const read = contract ? (progress.reads?.[contract.id] ?? null) : null;
+      return {
+        data: {
+          template: resolvedTemplate(tpl, pid),
+          contract,
+          deploy,
+          read,
+          interaction,
+          source,
+          event,
+          apiQuery,
+          steps: guideSteps({ tpl, contract, deploy, read, interaction, source, event, apiQuery }),
+          finality: 'unknown',
+        },
+      };
+    });
+
+    app.post(`${P}/playground/template`, async (request, reply) => {
+      const g = await workspaceGuard(pool, request, reply, { mutate: true });
+      if (!g) return;
+      if (!g.project.playground) return noGuide(reply);
+      const template = body(request).template;
+      if (!PLAYGROUND_TEMPLATE_IDS.includes(template as never)) return fail(reply, 'INVALID_REQUEST', 'Choose one of the bundled templates.');
+      await pool.query(`UPDATE projects SET playground_template=$2, updated_at=now() WHERE id=$1`, [g.project.id, template]);
+      return { data: { template } };
+    });
+
+    // Explicit and idempotent: a repeated call returns the existing source instead of creating another.
+    app.post(`${P}/playground/indexer-source`, async (request, reply) => {
+      const g = await workspaceGuard(pool, request, reply, { mutate: true });
+      if (!g) return;
+      if (!g.project.playground) return noGuide(reply);
+      const tpl = playgroundTemplate(g.project.playground_template);
+      if (!tpl) return fail(reply, 'INVALID_REQUEST', 'Choose a template first.');
+      const b = body(request);
+      const c = await contractOf(g.project.id, String(b.contractId ?? ''));
+      if (!c || c.removed_at) return fail(reply, 'NOT_FOUND', 'Contract not found in this project.');
+      const existing = await pool.query(
+        `SELECT id, start_block::text AS start_block FROM indexer_sources WHERE project_id=$1 AND contract_id=$2 AND desired_state <> 'deleted' AND $3 = ANY(event_names) ORDER BY created_at DESC LIMIT 1`,
+        [g.project.id, c.id, tpl.event.name],
+      );
+      if (existing.rowCount) return { data: { id: existing.rows[0].id, existing: true, startBlock: existing.rows[0].start_block } };
+      if (!c.deploy_block) return fail(reply, 'INVALID_REQUEST', 'No deployment block is recorded for this contract. Configure the source on the Indexer page with a block you know is at or before deployment.');
+      const deployBlock = BigInt(c.deploy_block);
+      // A later start block is accepted only as the visitor's explicit recovery choice, never silently.
+      const explicit = typeof b.startBlock === 'string' && /^(0|[1-9][0-9]{0,18})$/.test(b.startBlock) ? BigInt(b.startBlock) : null;
+      if (explicit !== null && explicit < deployBlock) return fail(reply, 'INVALID_REQUEST', `Start block is before the deployment block ${deployBlock}.`);
+      const start = explicit ?? deployBlock;
+      if (explicit === null) {
+        const unavailable = await startBlockAvailabilityError(start);
+        if (unavailable?.code === 'INVALID_REQUEST') {
+          let head: string | null = null;
+          try {
+            head = await evm.blockNumber();
+          } catch {
+            head = null;
+          }
+          request.pdErrorCode = 'HISTORY_UNAVAILABLE';
+          return reply.code(409).send({
+            error: {
+              code: 'HISTORY_UNAVAILABLE',
+              message: `The RPC node no longer serves deployment block ${deployBlock}${head ? ` (head is ${head})` : ''}, so indexing cannot start there. Starting later leaves blocks ${deployBlock}${head ? `–${BigInt(head) - 1n}` : ' onward'} uncovered, including any event already emitted in them.`,
+              requestId: request.id,
+            },
+            recovery: { deployBlock: deployBlock.toString(), head, suggestedStartBlock: head },
+          });
+        }
+        if (unavailable) return fail(reply, unavailable.code, unavailable.message);
+      }
+      const created = await createSource(g, reply, { contractId: c.id, events: [tpl.event.name], startBlock: start.toString(), reuseExisting: true });
+      if (!created) return;
+      if (created.existing) {
+        const s = await pool.query(`SELECT start_block::text AS start_block FROM indexer_sources WHERE id=$1`, [created.id]);
+        return { data: { id: created.id, existing: true, startBlock: s.rows[0].start_block } };
+      }
+      const id = created.id;
+      if (start > deployBlock) {
+        await pool.query(`INSERT INTO ops_logs(project_id,source,level,message,detail,indexer_source_id) VALUES ($1,'indexer','WARN',$2,$3,$4)`, [
+          g.project.id,
+          `Playground source starts after the deployment block by explicit choice: blocks ${deployBlock}–${start - 1n} are not covered.`,
+          JSON.stringify({ deployBlock: deployBlock.toString(), startBlock: start.toString() }),
+          id,
+        ]);
+      }
+      return reply.code(201).send({ data: { id, existing: false, startBlock: start.toString(), uncovered: start > deployBlock ? { fromBlock: deployBlock.toString(), toBlock: (start - 1n).toString() } : null } });
+    });
+  }
+}
+
+type GuideState = 'done' | 'in_progress' | 'todo' | 'attention';
+interface GuideFacts {
+  tpl: NonNullable<ReturnType<typeof playgroundTemplate>>;
+  contract: Record<string, any> | null;
+  deploy: Record<string, any> | null;
+  read: { function: string; blockNumber: string } | null;
+  interaction: Record<string, any> | null;
+  source: Record<string, any> | null;
+  event: Record<string, any> | null;
+  apiQuery: Record<string, any> | null;
+}
+
+function txState(t: Record<string, any> | null): GuideState {
+  if (!t) return 'todo';
+  if (t.execution_status === 'success') return 'done';
+  if (t.execution_status === 'reverted' || t.submission_status === 'rejected') return 'attention';
+  if (t.submission_status === 'unknown' || t.tracking_status === 'gave_up' || t.inclusion_status === 'reorged_out') return 'attention';
+  return 'in_progress';
+}
+
+function txDetail(t: Record<string, any>, what: string): string {
+  if (t.execution_status === 'reverted') return `${what} reverted on-chain. A reverted transaction may still be charged a fee.`;
+  if (t.submission_status === 'rejected') return `${what} was not submitted (rejected or blocked before broadcast).`;
+  if (t.submission_status === 'unknown') return `${what} submission is unconfirmed. Check the transaction before trying again; nothing is resent automatically.`;
+  if (t.inclusion_status === 'reorged_out') return `${what} was reorganized out and may be re-included.`;
+  if (t.tracking_status === 'gave_up') return `No receipt was observed for ${what.toLowerCase()} in the tracking window.`;
+  return `${what} submitted; waiting for its receipt.`;
+}
+
+/** Ordered checklist states, derived only from observed records. */
+function guideSteps(f: GuideFacts | null): Array<{ id: string; title: string; state: GuideState; detail: string }> {
+  if (!f) {
+    return [
+      { id: 'template', title: 'Choose template', state: 'todo', detail: 'Pick one of the bundled contracts. Nothing is deployed yet.' },
+      { id: 'deploy', title: 'Deploy contract', state: 'todo', detail: 'Choose a template first.' },
+      { id: 'read', title: 'Read contract state', state: 'todo', detail: 'Available after deployment.' },
+      { id: 'write', title: 'Submit example interaction', state: 'todo', detail: 'Available after deployment.' },
+      { id: 'event', title: 'Inspect indexed event', state: 'todo', detail: 'Available after the interaction.' },
+      { id: 'api', title: 'Query application data', state: 'todo', detail: 'Available after the event is indexed.' },
+    ];
+  }
+  const { tpl, contract, deploy, read, interaction, source, event, apiQuery } = f;
+  const deployState: GuideState = contract ? 'done' : txState(deploy) === 'done' ? 'in_progress' : txState(deploy);
+  const writeState: GuideState = contract ? txState(interaction) : 'todo';
+  let eventState: GuideState = 'todo';
+  let eventDetail = 'Available after the interaction succeeds.';
+  if (event) {
+    eventState = 'done';
+    eventDetail = `${tpl.event.name} indexed in block ${event.block_number} and decoded.`;
+  } else if (contract && !source) {
+    eventState = writeState === 'done' ? 'attention' : 'todo';
+    eventDetail = `No indexer source covers ${tpl.event.name} yet. Start indexing from the deployment block so the event is not missed.`;
+  } else if (source && ['error', 'recovery_required'].includes(source.status)) {
+    eventState = 'attention';
+    eventDetail = `The indexer source needs attention: ${source.last_error ?? source.status}.`;
+  } else if (writeState === 'done') {
+    eventState = 'in_progress';
+    eventDetail = `Waiting for the indexer: checkpoint ${source?.checkpoint_block ?? 'none yet'}, write included in block ${interaction?.block_number ?? 'unknown'}.`;
+  }
+  return [
+    { id: 'template', title: 'Choose template', state: 'done', detail: `${tpl.title} (${tpl.contractName}).` },
+    {
+      id: 'deploy',
+      title: 'Deploy contract',
+      state: deployState,
+      detail: contract ? `Deployed at ${contract.address}${contract.deploy_block ? ` in block ${contract.deploy_block}` : ''}.` : deploy ? (deployState === 'in_progress' && deploy.execution_status === 'success' ? 'Receipt observed; adding the contract to the project.' : txDetail(deploy, 'The deployment')) : 'Not deployed yet.',
+    },
+    {
+      id: 'read',
+      title: 'Read contract state',
+      state: !contract ? 'todo' : read ? 'done' : 'todo',
+      detail: read ? `${read.function} returned a decoded result at block ${read.blockNumber}.` : contract ? `Call ${tpl.read.function} through eth_call; nothing is broadcast.` : 'Available after deployment.',
+    },
+    {
+      id: 'write',
+      title: 'Submit example interaction',
+      state: writeState,
+      detail: !contract ? 'Available after deployment.' : !interaction ? `Review and sign ${tpl.write.function}.` : writeState === 'done' ? `${tpl.write.function} succeeded in block ${interaction.block_number}.` : txDetail(interaction, 'The interaction'),
+    },
+    { id: 'event', title: 'Inspect indexed event', state: eventState, detail: eventDetail },
+    {
+      id: 'api',
+      title: 'Query application data',
+      state: apiQuery ? 'done' : 'todo',
+      detail: apiQuery ? `GET /v1/projects/{projectId}/events answered 200 (${apiQuery.request_id}).` : event ? 'Read the event through the project API with a read key.' : 'Available after the event is indexed.',
+    },
+  ];
 }

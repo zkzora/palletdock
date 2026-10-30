@@ -21,7 +21,8 @@ rl.close();
 const pool = createPool();
 try {
   const hash = await hashPassword(password);
-  const existing = await pool.query('SELECT id FROM owners WHERE lower(email)=$1', [email]);
+  // Accounts only: temporary playground guests have no email and are never created or reset here.
+  const existing = await pool.query(`SELECT id FROM owners WHERE kind='account' AND lower(email)=$1`, [email]);
   if (existing.rowCount) {
     const r = await pool.query('UPDATE owners SET email=$1, password_hash=$2 WHERE id=$3 RETURNING id', [email, hash, existing.rows[0].id]);
     await pool.query('UPDATE sessions SET revoked_at=now() WHERE owner_id=$1 AND revoked_at IS NULL', [existing.rows[0].id]);

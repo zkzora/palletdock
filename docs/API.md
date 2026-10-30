@@ -55,6 +55,8 @@ Each request is its own database snapshot. A `/v1/.../indexer` call made after t
 
 `{ "error": { "code", "message", "requestId" } }` with 400 `INVALID_QUERY`, 401 `UNAUTHORIZED`, 403 `FORBIDDEN_SCOPE`, 404 `PROJECT_NOT_FOUND`, 409 `CURSOR_RESTART_REQUIRED`, 429 `RATE_LIMITED`, 5xx. Messages never include secrets or another owner's data.
 
+Keys of a temporary playground workspace work like any other key, expire no later than the workspace, and return 401 `UNAUTHORIZED` once the workspace has expired, even before they are revoked. The `/v1` routes and their semantics are unchanged; the playground adds only browser routes under `/auth` and `/workspace` (see [PLAYGROUND.md](PLAYGROUND.md)), which are not part of the public read API specification.
+
 ## Consumer examples
 
 - [CONSUMER.md](CONSUMER.md): the `/consumer` demo page (latest value, event identity, coverage, freshness, finality, tracking condition; read key kept server-side).

@@ -40,6 +40,7 @@ See the [testnet walkthrough](docs/WALKTHROUGH.md) for the detailed steps.
 | Indexer | Configure EVM event sources, inspect raw and decoded logs, follow checkpoints, and see retry or recovery-required states |
 | API | Query contracts, transactions, events, and indexer status through scoped, expiring, revocable keys and snapshot pagination |
 | Monitoring | Inspect RPC observations, worker activity, indexing progress, and operational logs |
+| Playground | **Try Playground** opens a temporary workspace with no email or password: the same dashboard, one project, a bundled template, and a guided checklist from deployment to the project API. Off by default (`PALLETDOCK_PLAYGROUND_ENABLED=1`) |
 
 The [consumer example](docs/CONSUMER.md) is a separate app-side reader of the public `/v1` API. It shows how another application can display indexed values, coverage, freshness, and unknown finality while keeping its read key server-side.
 
@@ -116,6 +117,8 @@ pnpm owner:create --email you@example.com
 ```
 
 The owner command prompts for a password of at least 12 characters. Running it again for the same email resets only that account and revokes only its sessions.
+
+**Playground.** With `PALLETDOCK_PLAYGROUND_ENABLED=1`, `/playground` starts a temporary workspace without an account. It lasts 6 hours from the start (never extended) and holds one project, up to 2 contracts, 1 indexer source, and 1 read key. Deploying and writing are real testnet transactions signed in the visitor's wallet, so they need test tPOT. **Save workspace** converts it into an account through the registration flow below. Lifecycle, limits, expiry, and conversion: [docs/PLAYGROUND.md](docs/PLAYGROUND.md). The playground is verified on the local fixture stack only, not yet on the hosted deployment.
 
 Self-service registration is disabled by default. Set `PALLETDOCK_SIGNUP_MODE=invite` with a server-side `PALLETDOCK_SIGNUP_INVITE_CODE` of at least 16 characters to let users create their own isolated accounts at `/signup`. `open` mode removes the code requirement, but should not be exposed long-term without deployment-level CAPTCHA, quotas, and abuse monitoring. The hosted demo runs in `open` mode during hackathon judging, with per-visitor sign-up and sign-in rate limits; it returns to `invite` or `disabled` afterwards.
 
@@ -220,6 +223,7 @@ docs/               Guides, API specification, status, and testnet evidence
 ## Documentation
 
 - [Walkthrough](docs/WALKTHROUGH.md) — contract-to-API testnet workflow
+- [Playground](docs/PLAYGROUND.md) — temporary workspaces: lifecycle, limits, templates, saving, expiry
 - [Architecture](docs/ARCHITECTURE.md) — processes, data model, and indexing
 - [Network guide](docs/NETWORK.md) — identity, account mapping, and units
 - [API guide](docs/API.md) · [OpenAPI specification](docs/openapi.yaml)

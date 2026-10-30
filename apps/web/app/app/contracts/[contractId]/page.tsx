@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
 import { AbiInputs } from '@/components/abi-form';
@@ -12,7 +12,7 @@ import { ErrorState, LoadingCards } from '@/components/page-state';
 import { useResource } from '@/lib/use-resource';
 import { useWallet } from '@/lib/wallet';
 import { evmUnitExplanation, evmUnitLabel, useEvmUnitPolicy } from '@/lib/units';
-import { groupDigits, pretty, shortHash, when } from '@/lib/format';
+import { formatNative, groupDigits, pretty, shortHash, when } from '@/lib/format';
 
 interface Fn {
   name: string;
@@ -41,13 +41,45 @@ interface Contract {
 
 type Tab = 'read' | 'write' | 'events' | 'abi';
 
+/**
+ * Guided links open a tab on a prepared call: ?tab=write&fn=store(uint256)&args=["42"].
+ * Values only prefill the form; reviewing and signing stay explicit. value=explicit means a
+ * payable call whose amount the visitor must type (it is never prefilled).
+ */
+function usePrefill() {
+  const search = useSearchParams();
+  const tab = search.get('tab');
+  let args: string[] = [];
+  try {
+    const parsed = JSON.parse(search.get('args') ?? '[]');
+    if (Array.isArray(parsed) && parsed.length <= 64) args = parsed.map((x) => String(x));
+  } catch {
+    args = [];
+  }
+  return {
+    tab: (['read', 'write', 'events', 'abi'] as const).find((t) => t === tab) ?? null,
+    fn: search.get('fn'),
+    args,
+    explicitValue: search.get('value') === 'explicit',
+  };
+}
+
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
+
 export default function ContractDetailPage() {
   const { contractId } = useParams<{ contractId: string }>();
   const { projectId, readOnly, request, href } = useWorkspace();
   const router = useRouter();
   const toast = useToast();
   const { data, error, loading, reload } = useResource<{ data: Contract }>(projectId ? `/workspace/projects/${projectId}/contracts/${contractId}` : null);
-  const [tab, setTab] = useState<Tab>('read');
+  const prefill = usePrefill();
+  // A guided link to the same contract (e.g. read → write) keeps this page mounted: follow its tab and re-init the forms.
+  const prefillKey = useSearchParams().toString();
+  const [tab, setTab] = useState<Tab>(prefill.tab ?? 'read');
+  useEffect(() => {
+    if (prefill.tab) setTab(prefill.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillKey]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const c = data?.data;
 
@@ -123,8 +155,8 @@ export default function ContractDetailPage() {
           ['abi', 'ABI'],
         ]}
       />
-      {tab === 'read' && <ReadTab c={c} />}
-      {tab === 'write' && <WriteTab c={c} />}
+      {tab === 'read' && <ReadTab key={prefillKey} c={c} />}
+      {tab === 'write' && <WriteTab key={prefillKey} c={c} />}
       {tab === 'events' && <EventsTab c={c} />}
       {tab === 'abi' && <AbiTab c={c} onReplaced={() => void reload()} />}
       {confirmRemove && (
@@ -154,8 +186,10 @@ export default function ContractDetailPage() {
 
 function ReadTab({ c }: { c: Contract }) {
   const { projectId, request } = useWorkspace();
-  const [sig, setSig] = useState(c.readFunctions[0]?.signature ?? '');
-  const [args, setArgs] = useState<string[]>([]);
+  const prefill = usePrefill();
+  const preset = prefill.tab === 'read' ? c.readFunctions.find((f) => f.signature === prefill.fn) : undefined;
+  const [sig, setSig] = useState(preset?.signature ?? c.readFunctions[0]?.signature ?? '');
+  const [args, setArgs] = useState<string[]>(preset ? prefill.args : []);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<any>(null);
   const [err, setErr] = useState('');
@@ -228,15 +262,27 @@ function WriteTab({ c }: { c: Contract }) {
   const { projectId, readOnly, request, openSigner, href } = useWorkspace();
   const units = useEvmUnitPolicy();
   const wallet = useWallet();
-  const [sig, setSig] = useState(c.writeFunctions[0]?.signature ?? '');
-  const [args, setArgs] = useState<string[]>([]);
-  const [value, setValue] = useState('0');
+  const prefill = usePrefill();
+  const preset = prefill.tab === 'write' ? c.writeFunctions.find((f) => f.signature === prefill.fn) : undefined;
+  const [sig, setSig] = useState(preset?.signature ?? c.writeFunctions[0]?.signature ?? '');
+  const [args, setArgs] = useState<string[]>(preset ? prefill.args : []);
+  const explicitValue = !!preset?.payable && prefill.explicitValue && sig === preset.signature;
+  const [value, setValue] = useState(explicitValue ? '' : '0');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [result, setResult] = useState<FlowResult | null>(null);
   const fn = c.writeFunctions.find((f) => f.signature === sig);
   const blocked = readOnly ? 'This project is archived and read-only.' : c.removedAt ? 'This contract was removed from tracking.' : !wallet.account ? 'Connect a wallet to sign writes. PalletDock never holds keys.' : !wallet.onPortaldot ? 'The wallet is on a different network. You will be asked to switch before signing.' : '';
+  // A recipient or other address argument must be a valid address before review (the server checks it again).
+  const badAddress = fn?.inputs.findIndex((p, i) => p.type === 'address' && !ADDRESS_RE.test((args[i] ?? '').trim())) ?? -1;
+  const inputProblem =
+    badAddress >= 0
+      ? `Enter a valid 0x address for ${fn?.inputs[badAddress].name || `argument ${badAddress + 1}`}.`
+      : fn?.payable && explicitValue && !/^[1-9][0-9]*$/.test(value.trim())
+        ? 'Enter the amount to send, in raw EVM base units. It is sent with the call.'
+        : '';
+  const valuePreview = fn?.payable && /^(0|[1-9][0-9]*)$/.test(value.trim()) && units?.status === 'verified' ? formatNative(value.trim(), units.decimals, units.symbol) : null;
 
   async function review() {
     setErr('');
@@ -277,9 +323,13 @@ function WriteTab({ c }: { c: Contract }) {
             <label htmlFor="write-value">
               Value <span className="dim">{evmUnitLabel(units)}</span>
             </label>
-            <input id="write-value" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} />
+            <input id="write-value" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} inputMode="numeric" placeholder={explicitValue ? 'required' : undefined} aria-describedby="write-value-help" />
+            <span id="write-value-help" className="dim" style={{ fontSize: 11.5 }}>
+              {valuePreview ? `= ${valuePreview}. ` : ''}This amount of test tokens is sent with the call; the review shows it with the fee estimate before you sign.
+            </span>
           </div>
         )}
+        {inputProblem && <p className="field-error">{inputProblem}</p>}
         {blocked && (
           <Notice tone="warning" action={!wallet.account && !readOnly ? <button className="button secondary" onClick={openSigner}>Connect wallet</button> : undefined}>
             {blocked}
@@ -287,7 +337,7 @@ function WriteTab({ c }: { c: Contract }) {
         )}
         {err && <Notice tone="danger">{err}</Notice>}
         <div>
-          <button className="button" onClick={() => void review()} disabled={busy || readOnly || !!c.removedAt || !wallet.account} aria-busy={busy}>
+          <button className="button" onClick={() => void review()} disabled={busy || readOnly || !!c.removedAt || !wallet.account || !!inputProblem} aria-busy={busy}>
             {busy ? 'Preparing review…' : 'Review write'}
           </button>
         </div>

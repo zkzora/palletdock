@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useWorkspace } from '@/components/workspace-shell';
 import { AbiInputs } from '@/components/abi-form';
 import { SignDialog, type FlowResult, type Prepared } from '@/components/sign-flow';
@@ -12,6 +13,7 @@ import { useWallet } from '@/lib/wallet';
 import { TxProgress } from '@/components/tx-progress';
 import { NETWORK } from '@/lib/network';
 import { evmUnitLabel, useEvmUnitPolicy } from '@/lib/units';
+import { usePlaygroundConfig } from '@/lib/playground';
 
 interface Sample {
   id: string;
@@ -38,10 +40,13 @@ interface Uploaded {
 type Choice = { kind: 'sample'; sample: Sample } | { kind: 'artifact'; artifact: Uploaded };
 
 export default function DeployPage() {
-  const { project, projectId, readOnly, request, openSigner } = useWorkspace();
+  const { project, projectId, readOnly, request, openSigner, guest } = useWorkspace();
   const units = useEvmUnitPolicy();
   const wallet = useWallet();
+  const search = useSearchParams();
+  const { config: playground } = usePlaygroundConfig();
   const { data, error, loading, reload } = useResource<{ data: { samples: Sample[]; artifacts: Uploaded[] } }>(projectId ? `/workspace/projects/${projectId}/artifacts` : null);
+  const template = playground?.templates.find((t) => t.id === search.get('template')) ?? null;
   const [step, setStep] = useState(1);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [args, setArgs] = useState<string[]>([]);
@@ -52,6 +57,19 @@ export default function DeployPage() {
   const [result, setResult] = useState<FlowResult | null>(null);
   const [upload, setUpload] = useState({ name: '', text: '' });
   const [uploadErr, setUploadErr] = useState('');
+  const [prefilled, setPrefilled] = useState(false);
+
+  // Guided playground: select the template's bundled sample and fill its documented constructor
+  // values once. Review and signing stay explicit.
+  useEffect(() => {
+    if (prefilled || !template || !data) return;
+    const sample = data.data.samples.find((s) => s.id === template.sampleId);
+    if (!sample) return;
+    setChoice({ kind: 'sample', sample });
+    setArgs(template.constructorArgs);
+    setStep(2);
+    setPrefilled(true);
+  }, [prefilled, template, data]);
 
   if (!project) return <Notice tone="warning">Create a project first.</Notice>;
   if (readOnly) return <Notice tone="warning" title="Archived project">Restore the project in Settings to deploy.</Notice>;
@@ -161,6 +179,11 @@ export default function DeployPage() {
                   </button>
                 ))}
               </div>
+              {guest ? (
+                <p className="dim" style={{ margin: 0, fontSize: 12.5 }}>
+                  A temporary workspace deploys the bundled templates only. Save the workspace as an account to upload your own artifacts.
+                </p>
+              ) : (
               <details className="card panel">
                 <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Upload a compiled artifact (JSON)</summary>
                 <form onSubmit={uploadArtifact} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
@@ -197,6 +220,7 @@ export default function DeployPage() {
                   </div>
                 </form>
               </details>
+              )}
               <p className="dim" style={{ margin: 0, fontSize: 12.5 }}>
                 Compatibility of EVM bytecode with Portaldot V3 Revive is confirmed only by a successful deployment. <Link href="/docs/deploy">Deploy guide</Link>
               </p>
@@ -211,6 +235,11 @@ export default function DeployPage() {
       ) : (
         <section className="card form-card" style={{ maxWidth: 680 }}>
           <h2 style={{ margin: 0, fontSize: 14 }}>Constructor arguments · {choice?.kind === 'sample' ? choice.sample.title : choice?.artifact.name}</h2>
+          {template && choice?.kind === 'sample' && choice.sample.id === template.sampleId && (
+            <Notice tone="info" title={`Playground template: ${template.title}`}>
+              {template.constructorNotes.join(' ')} Deploying is a real testnet transaction: you review it next and sign it in your wallet.
+            </Notice>
+          )}
           <AbiInputs params={inputs} values={args} onChange={setArgs} idPrefix="ctor" />
           {payable && (
             <div className="field">

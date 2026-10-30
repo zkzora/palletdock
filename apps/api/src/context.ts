@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { safeEqualStr, sha256Hex } from '@palletdock/db';
 import { API_KEY_PREFIX, ERROR_CODES, evmUnitPolicyFromFingerprint, type ErrorCode, type EvmUnitPolicy, type ReadScope } from '@palletdock/shared';
+import { resolveGuestConfig } from './guest-config.js';
 
 export const SESSION_COOKIE = 'palletdock_session';
 
@@ -14,12 +15,26 @@ export function cursorSecret(): string {
   return s;
 }
 
+export type SessionKind = 'account' | 'guest';
+
 export interface SessionAuth {
   ownerId: string;
   sessionId: string;
   csrfToken: string;
-  email: string;
+  /** Null for a temporary playground guest, which never has an email or password. */
+  email: string | null;
+  kind: SessionKind;
+  /** Fixed expiry of a guest workspace (and its session); null for accounts. */
+  guestExpiresAt: string | null;
 }
+
+/** Owner as returned to the browser. Guests carry no email and are labelled explicitly. */
+export function ownerView(auth: Pick<SessionAuth, 'ownerId' | 'email' | 'kind'>) {
+  return { id: auth.ownerId, email: auth.email, kind: auth.kind, displayName: auth.kind === 'guest' ? 'Temporary workspace' : auth.email };
+}
+
+export const GUEST_EXPIRED_MESSAGE =
+  'This temporary playground workspace expired. Its off-chain access ended; contracts and transactions stay on the testnet. Start a new playground to continue.';
 
 export interface KeyAuth {
   keyId: string;
@@ -57,20 +72,59 @@ export async function sessionAuth(pool: pg.Pool, request: FastifyRequest, reply:
     return null;
   }
   const result = await pool.query(
-    `SELECT s.id AS session_id, s.csrf_token, o.id AS owner_id, o.email
+    `SELECT s.id AS session_id, s.csrf_token, o.id AS owner_id, o.email, o.kind, o.guest_expires_at,
+            (s.revoked_at IS NULL AND s.expires_at > now()) AS session_valid,
+            (o.kind = 'guest' AND o.guest_expires_at <= now()) AS guest_expired
        FROM sessions s JOIN owners o ON o.id=s.owner_id
-      WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at > now()`,
+      WHERE s.token_hash=$1`,
     [sha256Hex(token)],
   );
-  if (!result.rowCount) {
+  const row = result.rows[0];
+  // Guest expiry is checked here, at authorization, not only by the maintenance pass.
+  if (row?.guest_expired) {
+    // The cookie is kept (it expires at the same moment and authorizes nothing), so later
+    // requests keep explaining the expiry instead of falling back to a plain sign-in prompt.
+    fail(reply, 'WORKSPACE_EXPIRED', GUEST_EXPIRED_MESSAGE);
+    return null;
+  }
+  if (!row || !row.session_valid) {
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     fail(reply, 'UNAUTHORIZED', 'Session expired. Sign in again.');
     return null;
   }
-  const row = result.rows[0];
+  // Activity is recorded but never extends a session or a guest workspace.
   await pool.query('UPDATE sessions SET last_seen_at=now() WHERE id=$1', [row.session_id]);
   request.pdAuth = { kind: 'session' };
-  return { ownerId: row.owner_id, sessionId: row.session_id, csrfToken: row.csrf_token, email: row.email };
+  return {
+    ownerId: row.owner_id,
+    sessionId: row.session_id,
+    csrfToken: row.csrf_token,
+    email: row.email,
+    kind: row.kind,
+    guestExpiresAt: row.guest_expires_at ? new Date(row.guest_expires_at).toISOString() : null,
+  };
+}
+
+/**
+ * Count one mutating or RPC-backed request against a guest workspace's action budget.
+ * Atomic (single conditional UPDATE), so parallel requests cannot exceed it. Accounts are unaffected.
+ */
+export async function consumeGuestAction(pool: pg.Pool, auth: SessionAuth, reply: FastifyReply): Promise<boolean> {
+  if (auth.kind !== 'guest') return true;
+  const max = resolveGuestConfig().maxActions;
+  const r = await pool.query(`UPDATE owners SET guest_actions=guest_actions+1 WHERE id=$1 AND kind='guest' AND guest_actions < $2 RETURNING guest_actions`, [auth.ownerId, max]);
+  if (!r.rowCount) {
+    fail(reply, 'LIMIT_REACHED', `This temporary workspace has used its ${max} workspace actions. Save the workspace as an account to continue, or start a new playground.`);
+    return false;
+  }
+  return true;
+}
+
+/** Refuse an action that temporary workspaces do not support, with the reason. */
+export function guestRestricted(auth: SessionAuth, reply: FastifyReply, message: string): boolean {
+  if (auth.kind !== 'guest') return false;
+  fail(reply, 'GUEST_RESTRICTED', message);
+  return true;
 }
 
 export function requireCsrf(auth: SessionAuth, request: FastifyRequest, reply: FastifyReply): boolean {
@@ -95,7 +149,13 @@ export async function keyAuth(pool: pg.Pool, request: FastifyRequest, reply: Fas
     fail(reply, 'UNAUTHORIZED', 'The project read key is invalid.');
     return null;
   }
-  const result = await pool.query(`SELECT id, project_id, secret_hash, scopes FROM api_keys WHERE prefix=$1 AND revoked_at IS NULL AND expires_at > now()`, [prefix]);
+  // A key of an expired guest workspace is rejected here even before maintenance revokes it.
+  const result = await pool.query(
+    `SELECT k.id, k.project_id, k.secret_hash, k.scopes
+       FROM api_keys k JOIN projects p ON p.id=k.project_id JOIN owners o ON o.id=p.owner_id
+      WHERE k.prefix=$1 AND k.revoked_at IS NULL AND k.expires_at > now() AND (o.kind <> 'guest' OR o.guest_expires_at > now())`,
+    [prefix],
+  );
   const row = result.rows[0];
   if (!row || !safeEqualStr(row.secret_hash, sha256Hex(token))) {
     fail(reply, 'UNAUTHORIZED', 'The project read key is invalid or expired.');
@@ -123,13 +183,14 @@ export async function projectOwned(pool: pg.Pool, projectId: string, ownerId: st
 
 /**
  * Session + ownership guard for workspace routes. Mutations also require CSRF
- * and, unless allowArchived, an active (non-archived) project.
+ * and, unless allowArchived, an active (non-archived) project. For a guest,
+ * mutations (and any route that sets guestBudget) count against its action budget.
  */
 export async function workspaceGuard(
   pool: pg.Pool,
   request: FastifyRequest,
   reply: FastifyReply,
-  opts: { mutate?: boolean; allowArchived?: boolean } = {},
+  opts: { mutate?: boolean; allowArchived?: boolean; guestBudget?: boolean } = {},
 ): Promise<{ auth: SessionAuth; project: Record<string, any> } | null> {
   const auth = await sessionAuth(pool, request, reply);
   if (!auth) return null;
@@ -144,8 +205,20 @@ export async function workspaceGuard(
     fail(reply, 'PROJECT_ARCHIVED', 'This project is archived and read-only. Restore it to make changes.');
     return null;
   }
+  if ((opts.guestBudget ?? !!opts.mutate) && !(await consumeGuestAction(pool, auth, reply))) return null;
   return { auth, project };
 }
+
+/**
+ * Lock a project row for the rest of a transaction. Quota checks run after this
+ * lock so concurrent requests for the same project are serialized.
+ */
+export async function lockProject(client: pg.PoolClient, projectId: string): Promise<void> {
+  await client.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+}
+
+/** Thrown inside a transaction when a guest quota is reached; the caller maps it to LIMIT_REACHED. */
+export class QuotaError extends Error {}
 
 /** Columns of network_fingerprints that evmUnitPolicyFromFingerprint reads. */
 export const UNIT_SOURCE_COLUMNS = 'id, status, token_symbol, token_decimals, spec_version::text, last_verified_at, evidence';

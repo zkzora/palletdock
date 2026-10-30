@@ -41,11 +41,13 @@ describe('consumer configuration stays server-side', () => {
 });
 
 describe('owner session check', () => {
-  const answer = (status: number) => (async () => new Response('{}', { status })) as unknown as typeof fetch;
+  const answer = (status: number, kind = 'account') => (async () => new Response(JSON.stringify({ session: { kind } }), { status })) as unknown as typeof fetch;
   it('accepts only a signed-in owner and tells an unreachable API apart from anonymous', async () => {
     expect(await ownerSession(null, 'http://api.test', answer(200))).toBe('anonymous');
     expect(await ownerSession('pd_session=x', 'http://api.test', answer(200))).toBe('owner');
     expect(await ownerSession('pd_session=x', 'http://api.test', answer(401))).toBe('anonymous');
+    // A temporary playground session is authenticated but is not the operator account.
+    expect(await ownerSession('pd_session=x', 'http://api.test', answer(200, 'guest'))).toBe('anonymous');
     const down = (async () => {
       throw new Error('ECONNREFUSED');
     }) as unknown as typeof fetch;

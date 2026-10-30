@@ -31,11 +31,18 @@ import { registerWorkspace, type WorkspaceDeps } from './workspace.js';
 import { listenOptions } from './listen.js';
 import { registerSignupRoutes } from './registration.js';
 import { clientIp, proxySecret } from './client-ip.js';
+import { resolveGuestConfig } from './guest-config.js';
+import { assertKeyQuota, guestUsage, keyExpirySql, registerPlaygroundRoutes } from './playground.js';
 import {
+  QuotaError,
   SESSION_COOKIE,
+  consumeGuestAction,
   cursorSecret,
   fail,
+  guestRestricted,
   keyAuth,
+  lockProject,
+  ownerView,
   projectOwned,
   requireCsrf,
   sessionAuth,
@@ -51,6 +58,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   // Sign-in attempts per visitor per 15 minutes (the fixture E2E stack raises it; it signs in many times from one address).
   const LOGIN_LIMIT = Number(process.env.API_LOGIN_RATE_LIMIT_PER_15_MINUTES ?? 10);
   if (!Number.isSafeInteger(LOGIN_LIMIT) || LOGIN_LIMIT < 1 || LOGIN_LIMIT > 1000) throw new Error('API_LOGIN_RATE_LIMIT_PER_15_MINUTES must be an integer from 1 to 1000.');
+  // Fail at startup on an invalid playground configuration (it is re-read on each use).
+  resolveGuestConfig();
   const app = Fastify({
     logger: process.env.NODE_ENV === 'test' ? false : { redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-csrf-token"]'] },
     bodyLimit: 3 * 1024 * 1024,
@@ -83,6 +92,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   });
 
   registerSignupRoutes(app, pool, CURSOR_SECRET, PROXY_SECRET);
+  registerPlaygroundRoutes(app, pool, CURSOR_SECRET, PROXY_SECRET);
 
   app.post('/auth/login', { config: { rateLimit: { max: LOGIN_LIMIT, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
@@ -95,7 +105,8 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
       [email, ipHash],
     );
     if (recent.rows[0].failures >= 10) return fail(reply, 'RATE_LIMITED', 'Too many failed sign-in attempts. Try again later.');
-    const owner = await pool.query('SELECT id, email, password_hash FROM owners WHERE lower(email)=$1', [email]);
+    // Temporary guests have no email or password, so they can never match here.
+    const owner = await pool.query(`SELECT id, email, password_hash FROM owners WHERE kind='account' AND lower(email)=$1`, [email]);
     const valid = owner.rows[0] ? await verifyPassword(password, owner.rows[0].password_hash) : false;
     await pool.query('INSERT INTO login_attempts(email,ip_hash,success) VALUES ($1,$2,$3)', [email, ipHash, valid]);
     if (!valid) return fail(reply, 'UNAUTHORIZED', 'Email or password is incorrect.');
@@ -113,13 +124,19 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
       secure: process.env.SESSION_COOKIE_SECURE === '1',
       expires: session.rows[0].expires_at,
     });
-    return { owner: { id: owner.rows[0].id, email }, csrfToken };
+    return { owner: ownerView({ ownerId: owner.rows[0].id, email, kind: 'account' }), session: { kind: 'account', expiresAt: null }, csrfToken };
   });
 
+  // session.kind tells the browser whether to render the temporary-workspace experience.
   app.get('/auth/me', async (request, reply) => {
     const auth = await sessionAuth(pool, request, reply);
     if (!auth) return;
-    return { owner: { id: auth.ownerId, email: auth.email }, csrfToken: auth.csrfToken };
+    return {
+      owner: ownerView(auth),
+      session: { kind: auth.kind, expiresAt: auth.guestExpiresAt },
+      csrfToken: auth.csrfToken,
+      playground: auth.kind === 'guest' ? await guestUsage(pool, auth.ownerId) : null,
+    };
   });
 
   app.post('/auth/logout', async (request, reply) => {
@@ -134,7 +151,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     const auth = await sessionAuth(pool, request, reply);
     if (!auth) return;
     const result = await pool.query(
-      `SELECT p.id,p.name,p.description,p.network_id,p.archived_at,p.created_at,p.updated_at,
+      `SELECT p.id,p.name,p.description,p.network_id,p.archived_at,p.created_at,p.updated_at,p.playground,p.playground_template,
               (SELECT count(1)::int FROM contracts c WHERE c.project_id=p.id AND c.removed_at IS NULL) AS contract_count,
               (SELECT count(1)::int FROM api_keys k WHERE k.project_id=p.id AND k.revoked_at IS NULL AND k.expires_at > now()) AS active_key_count,
               COALESCE((SELECT s.status FROM indexer_sources s WHERE s.project_id=p.id ORDER BY s.updated_at DESC LIMIT 1),'not_configured') AS indexer_status
@@ -220,12 +237,13 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   app.post('/workspace/projects', async (request, reply) => {
     const auth = await sessionAuth(pool, request, reply);
     if (!auth || !requireCsrf(auth, request, reply)) return;
+    if (guestRestricted(auth, reply, 'A temporary workspace has one project. Save the workspace as an account to create more.')) return;
     const parsed = projectCreateSchema.safeParse(request.body);
     if (!parsed.success) return fail(reply, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid project.');
     try {
       const result = await pool.query(
-        'INSERT INTO projects(owner_id,name,description,network_id) VALUES ($1,$2,$3,$4) RETURNING *',
-        [auth.ownerId, parsed.data.name, parsed.data.description, parsed.data.networkId],
+        'INSERT INTO projects(owner_id,name,description,network_id,playground) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+        [auth.ownerId, parsed.data.name, parsed.data.description, parsed.data.networkId, parsed.data.playground],
       );
       return reply.code(201).send({ data: result.rows[0] });
     } catch (error) {
@@ -257,6 +275,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   app.post('/workspace/projects/:projectId/archive', async (request, reply) => {
     const auth = await sessionAuth(pool, request, reply);
     if (!auth || !requireCsrf(auth, request, reply)) return;
+    if (guestRestricted(auth, reply, 'A temporary workspace stops its indexer sources by itself when it expires. Archiving is available after saving it as an account.')) return;
     const projectId = stringParam((request.params as Record<string, unknown>).projectId);
     if (!(await projectOwned(pool, projectId, auth.ownerId))) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
     await withTx(pool, async (client) => {
@@ -270,6 +289,7 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
   app.post('/workspace/projects/:projectId/restore', async (request, reply) => {
     const auth = await sessionAuth(pool, request, reply);
     if (!auth || !requireCsrf(auth, request, reply)) return;
+    if (guestRestricted(auth, reply, 'Archive and restore are available after saving the temporary workspace as an account.')) return;
     const projectId = stringParam((request.params as Record<string, unknown>).projectId);
     const result = await pool.query('UPDATE projects SET archived_at=NULL,updated_at=now() WHERE id=$1 AND owner_id=$2 RETURNING id', [projectId, auth.ownerId]);
     if (!result.rowCount) return fail(reply, 'PROJECT_NOT_FOUND', 'Project not found.');
@@ -294,15 +314,32 @@ export async function buildServer(pool = createPool(), deps: WorkspaceDeps = {})
     if (project.archived_at) return fail(reply, 'PROJECT_ARCHIVED', 'Restore the project before creating a key.');
     const parsed = apiKeyCreateSchema.safeParse(request.body);
     if (!parsed.success) return fail(reply, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Invalid key request.');
+    if (!(await consumeGuestAction(pool, auth, reply))) return;
     const prefix = `${API_KEY_PREFIX}${randomToken(9)}`;
     const secret = `${prefix}.${randomToken(32)}`;
-    const result = await pool.query(
-      `INSERT INTO api_keys(project_id,name,prefix,secret_hash,scopes,expires_at)
-       VALUES ($1,$2,$3,$4,$5,now()+($6::text || ' days')::interval)
-       RETURNING id,name,prefix,scopes,created_at,expires_at`,
-      [projectId, parsed.data.name, prefix, sha256Hex(secret), parsed.data.scopes, parsed.data.expiresInDays],
-    );
-    return reply.code(201).send({ data: result.rows[0], secret, secretShownOnce: true });
+    let result: pg.QueryResult;
+    try {
+      // The active-key quota is checked under the project lock, so parallel requests cannot exceed it.
+      result = await withTx(pool, async (client) => {
+        await lockProject(client, projectId);
+        await assertKeyQuota(client, auth, projectId);
+        return client.query(
+          `INSERT INTO api_keys(project_id,name,prefix,secret_hash,scopes,expires_at)
+           VALUES ($1,$2,$3,$4,$5,${keyExpirySql(auth, '$6', '$7')})
+           RETURNING id,name,prefix,scopes,created_at,expires_at`,
+          [projectId, parsed.data.name, prefix, sha256Hex(secret), parsed.data.scopes, parsed.data.expiresInDays, ...(auth.kind === 'guest' ? [auth.guestExpiresAt] : [])],
+        );
+      });
+    } catch (error) {
+      if (error instanceof QuotaError) return fail(reply, 'LIMIT_REACHED', error.message);
+      throw error;
+    }
+    return reply.code(201).send({
+      data: result.rows[0],
+      secret,
+      secretShownOnce: true,
+      ...(auth.kind === 'guest' ? { expiryNote: 'Read keys of a temporary workspace expire no later than the workspace.' } : {}),
+    });
   });
 
   app.post('/workspace/projects/:projectId/keys/:keyId/revoke', async (request, reply) => {

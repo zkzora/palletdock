@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useWorkspace } from '@/components/workspace-shell';
 import { CopyButton, Notice, Pre, Tabs } from '@/components/ui';
 import { EmptyState } from '@/components/page-state';
@@ -38,7 +39,7 @@ function publicBase(): string {
 }
 
 export default function ApiPage() {
-  const { project, projectId, readOnly, request } = useWorkspace();
+  const { project, projectId, readOnly, request, guest } = useWorkspace();
   const [tab, setTab] = useState<Tab>('playground');
   if (!project || !projectId) return <EmptyState title="Create a project first" body="The read API is scoped to one project." />;
   return (
@@ -51,16 +52,21 @@ export default function ApiPage() {
         </div>
       </div>
       <Tabs<Tab> label="API views" value={tab} onChange={setTab} tabs={[['playground', 'Playground'], ['keys', 'Keys'], ['endpoints', 'Endpoints']]} />
-      {tab === 'playground' && <Playground projectId={projectId} readOnly={readOnly} request={request} />}
+      {tab === 'playground' && <Playground projectId={projectId} readOnly={readOnly} request={request} guest={guest} />}
       {tab === 'keys' && <KeysPanel />}
       {tab === 'endpoints' && <Endpoints projectId={projectId} />}
     </div>
   );
 }
 
-function Playground({ projectId, readOnly, request }: { projectId: string; readOnly: boolean; request: <T>(p: string, i?: RequestInit) => Promise<T> }) {
-  const [ep, setEp] = useState<Ep>('events');
-  const [vals, setVals] = useState<Record<string, string>>({});
+function Playground({ projectId, readOnly, request, guest }: { projectId: string; readOnly: boolean; request: <T>(p: string, i?: RequestInit) => Promise<T>; guest: boolean }) {
+  // Guided links prefill the request (?endpoint=events&contract=0x…&event=NumberChanged); the key is never in the URL.
+  const search = useSearchParams();
+  const initialEp = (['events', 'transactions', 'contracts', 'indexer'] as Ep[]).find((e) => e === search.get('endpoint')) ?? 'events';
+  const [ep, setEp] = useState<Ep>(initialEp);
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(FIELDS[initialEp].flatMap((f) => (search.get(f.key) ? [[f.key, String(search.get(f.key)).slice(0, 200)]] : []))),
+  );
   const [cursor, setCursor] = useState('');
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -97,7 +103,11 @@ function Playground({ projectId, readOnly, request }: { projectId: string; readO
         body: JSON.stringify({ name: `playground-${new Date().toISOString().slice(0, 10)}`, scopes: ['contracts:read', 'transactions:read', 'events:read', 'indexer:read'], expiresInDays: 7 }),
       });
       setKey(r.secret);
-      setKeyNote(`Created a 7-day playground key (expires ${new Date(r.data.expires_at).toLocaleDateString()}). It is held only in this page's memory; revoke it from Keys when done.`);
+      setKeyNote(
+        guest
+          ? `Created a read key that expires with this temporary workspace (${new Date(r.data.expires_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}). It is held only in this page's memory; a temporary workspace holds one active key.`
+          : `Created a 7-day playground key (expires ${new Date(r.data.expires_at).toLocaleDateString()}). It is held only in this page's memory; revoke it from Keys when done.`,
+      );
     } catch (e) {
       setKeyNote((e as Error).message);
     }
@@ -124,7 +134,7 @@ function Playground({ projectId, readOnly, request }: { projectId: string; readO
             Stored secrets cannot be retrieved. Paste a key you saved, or create a short-lived one for this page.{' '}
             {!readOnly && (
               <button type="button" className="mini-button" onClick={() => void createPlaygroundKey()}>
-                Create 7-day playground key
+                {guest ? 'Create read key for this workspace' : 'Create 7-day playground key'}
               </button>
             )}
           </span>

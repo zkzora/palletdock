@@ -161,6 +161,9 @@ try {
     PALLETDOCK_SIGNUP_INVITE_CODE: signupInviteCode,
     PALLETDOCK_SIGNUP_RATE_LIMIT_PER_15_MINUTES: '20',
     PALLETDOCK_PROXY_SECRET: proxySecret,
+    // Playground on, with a start limit that fits every E2E guest coming from one local address.
+    PALLETDOCK_PLAYGROUND_ENABLED: '1',
+    PALLETDOCK_PLAYGROUND_STARTS_PER_HOUR: '60',
   });
   // Hardhat mines a block only per transaction and serves its logs immediately, so no confirmation lag.
   run('worker', ['--filter', '@palletdock/worker', 'start'], { ...common, PALLETDOCK_INDEX_LAG_BLOCKS: '0' });
@@ -169,7 +172,8 @@ try {
   await waitFor('web', async () => (await fetch(`http://127.0.0.1:${PORTS.web}/login`)).ok, 240_000);
   log('api and web ready');
 
-  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, email, password, signupInviteCode, accounts, consumerConfig, fixture: true };
+  // databaseUrl points at this throwaway embedded PostgreSQL (fixture only); the playground E2E uses it to end a guest's lifetime.
+  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, databaseUrl: DATABASE_URL, email, password, signupInviteCode, accounts, consumerConfig, fixture: true };
   writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2));
   log(`ready: ${state.webUrl} (state in .data/e2e/state.json)`);
   // Keep running until SIGINT/SIGTERM (Playwright global teardown or Ctrl+C).

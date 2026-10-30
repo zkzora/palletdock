@@ -74,8 +74,11 @@ export class TransactionTracker {
         `SELECT t.id,t.project_id,t.fingerprint_id,t.hash,t.kind,t.origin,t.from_address,t.to_address,t.inclusion_status,t.execution_status,t.block_hash,t.artifact_id,t.contract_id,t.input,
                 t.abi_version_id,t.created_at,t.check_failures,p.archived_at
            FROM transactions t JOIN projects p ON p.id=t.project_id
+           JOIN owners o ON o.id=p.owner_id
            JOIN network_fingerprints f ON f.id=t.fingerprint_id AND f.status='active'
           WHERE t.hash IS NOT NULL AND t.tracking_status='active'
+            -- An expired temporary workspace gets no further receipt polling.
+            AND (o.kind <> 'guest' OR o.guest_expires_at > now())
             AND (t.next_check_at IS NULL OR t.next_check_at <= now())
           ORDER BY t.next_check_at NULLS FIRST, t.created_at
           LIMIT $1`,
