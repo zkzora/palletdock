@@ -4,13 +4,74 @@
 
 A developer workspace for Solidity builders on **Portaldot V3 Testnet**. Deploy or connect a contract, track its transactions, index its events, and expose the data to your application from one project.
 
-[Website](https://palletdock.vercel.app/) · [Create an account](https://palletdock.vercel.app/signup) · [Open workspace](https://palletdock.vercel.app/app) · [Documentation](https://palletdock.vercel.app/docs) · [Testnet evidence](docs/TESTNET_EVIDENCE.md)
+[Website](https://palletdock.vercel.app/) · [Try Playground](https://palletdock.vercel.app/playground) · [How to test](#how-to-test) · [Create an account](https://palletdock.vercel.app/signup) · [Documentation](https://palletdock.vercel.app/docs) · [Testnet evidence](docs/TESTNET_EVIDENCE.md)
+
+## How to test
+
+The hosted app runs at **[palletdock.vercel.app](https://palletdock.vercel.app/)** on Portaldot V3 Testnet: web on Vercel, API and worker on Railway. Paths 1 and 2 need no install, no account, no wallet, and no test tokens.
+
+### 1. Open the workspace (1 minute, nothing needed)
+
+1. Open **[palletdock.vercel.app/playground](https://palletdock.vercel.app/playground)**, choose **Storage**, and click **Start temporary workspace**.
+2. You land in the real dashboard as a temporary guest, with no email or password. The workspace lasts 6 hours.
+3. Follow the guide at the top of the page. Every area can be opened: Contracts, Transactions, Indexer, API, and Monitoring. Deploying and writing need a wallet with test tPOT (path 3).
+
+**Test accounts:** none are needed. The Playground replaces a shared login, and nobody else sees your workspace. To keep it, click **Save workspace**: that creates your own account (email and password) and keeps everything. You can also [sign up](https://palletdock.vercel.app/signup) directly; registration is open.
+
+### 2. Check the recorded testnet run (nothing needed)
+
+On 21 October 2026 the full chain ran on Portaldot V3 Testnet: deploy `PalletDockStorage`, then `store(42)`, then the indexed `NumberChanged` event, then the `/v1` API answer. No block explorer is confirmed for this testnet, so check the transactions on the public RPC:
+
+```bash
+# store(42): status 0x1, block 0x2079f (133023), one NumberChanged log from 0xdd98…11ed
+curl -s https://test-evm-rpc-v3.portaldot.dev -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x14ee38e9c689159661736d39859cb588aa73678d265cac96cd59f9cbd308fa47"]}'
+
+# Deployment: contractAddress 0xdd982913cb04f9e438437e2137ba1452e4b211ed
+curl -s https://test-evm-rpc-v3.portaldot.dev -H 'content-type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x25f03a786e57dd203bfe0a00da57208d1eaef22594fdfef512b7257cdec1f30f"]}'
+```
+
+Block hashes, the indexed record, the API request ID, and screenshots are in [Testnet evidence](docs/TESTNET_EVIDENCE.md).
+
+### 3. Run the full flow yourself (MetaMask and test tPOT)
+
+1. **Install [MetaMask](https://metamask.io/download/).** It is the tested wallet; Rabby and some other wallets do not support Portaldot V3.
+2. **Add the network.** In the Playground workspace, click **Connect wallet**, then **Switch / add Portaldot V3** and approve in MetaMask. To add it by hand instead:
+
+   | Field | Value |
+   | --- | --- |
+   | Network name | Portaldot V3 Testnet |
+   | RPC URL | `https://test-evm-rpc-v3.portaldot.dev` |
+   | Chain ID | `420420777` |
+   | Currency symbol | `tPOT` |
+   | Block explorer | leave empty |
+
+3. **Get test tPOT.** There is no faucet. The Portaldot team hands out tPOT on request in its Discord, once every 24 hours, so request it a day ahead.
+   1. In PalletDock, open **Overview → Account mapping → Resolve funding account**. It shows your MetaMask address and the native account (SS58) that the runtime maps to it.
+   2. Post a request in the Portaldot Discord with both addresses. A request template is in [Funding](https://palletdock.vercel.app/docs/funding).
+   3. When the tPOT arrives, the signing review shows your balance. Signing stays blocked while the balance is too low for the fee.
+4. **Run the guide.** Open deploy, review the **Real testnet transaction**, and sign. Then run `retrieve()`, sign `store(42)`, start indexing, and open the API playground. A step turns done only from what was observed: a receipt, a decoded event, or a `200` API answer. Clicking a step never marks it done.
+
+### 4. Run it locally without test tokens
+
+A local fixture stack runs the whole flow on a **local Hardhat chain** (labelled **FIXTURE NETWORK**, not Portaldot) with a scripted test wallet. It needs Node.js 22+, pnpm 11+, and Chrome.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @palletdock/web exec playwright install chrome
+pnpm e2e:stack     # terminal 1: chain, database, API, worker, and web on ports 3199/4199/8599
+pnpm --filter @palletdock/web exec playwright test -c playwright.fixture.config.ts fixture-playground   # terminal 2
+```
+
+The second command runs the Playground journeys in a browser. Storage goes end to end: deploy, read, write, indexed event, API query, and Save workspace. Payments, ERC-20, and ERC-721 run through their indexed events.
+
 
 ![PalletDock workspace showing an active event indexer, checkpoint, coverage, and decoded contract event](docs/evidence/2026-10-21-live/acceptance/main-06-indexed.png)
 
 *Actual workspace from the recorded 21 October 2026 testnet run, using a local application stack connected to Portaldot V3. This screenshot shows that run's state, not the current hosted deployment.*
 
-**Status:** working testnet MVP, with a hosted web app, API, worker, and private database. To use the workspace, [create an account](https://palletdock.vercel.app/signup) with an email and password; each account sees only its own projects, contracts, transactions, and API keys. Writes need a browser wallet on Portaldot V3 Testnet (EVM chain 420420777) with test tPOT. The [public read-only integration example](https://palletdock.vercel.app/consumer) needs no account; it demonstrates an application consuming PalletDock's API. To run your own stack instead, follow [Quick start](#quick-start).
+**Status:** working testnet MVP, with a hosted web app, API, worker, and private database. To use the workspace, start a temporary [Playground](https://palletdock.vercel.app/playground) with no account, or [create an account](https://palletdock.vercel.app/signup) with an email and password; each workspace sees only its own projects, contracts, transactions, and API keys. Writes need a browser wallet on Portaldot V3 Testnet (EVM chain 420420777) with test tPOT. The [public read-only integration example](https://palletdock.vercel.app/consumer) needs no account; it demonstrates an application consuming PalletDock's API. To run your own stack instead, follow [Quick start](#quick-start).
 
 ## The problem
 
@@ -40,7 +101,7 @@ See the [testnet walkthrough](docs/WALKTHROUGH.md) for the detailed steps.
 | Indexer | Configure EVM event sources, inspect raw and decoded logs, follow checkpoints, and see retry or recovery-required states |
 | API | Query contracts, transactions, events, and indexer status through scoped, expiring, revocable keys and snapshot pagination |
 | Monitoring | Inspect RPC observations, worker activity, indexing progress, and operational logs |
-| Playground | **Try Playground** opens a temporary workspace with no email or password: the same dashboard, one project, a bundled template, and a guided checklist from deployment to the project API. Off by default (`PALLETDOCK_PLAYGROUND_ENABLED=1`) |
+| Playground | **Try Playground** opens a temporary workspace with no email or password: the same dashboard, one project, a bundled template, and a guided checklist from deployment to the project API. Enabled on the hosted deployment; off by default when self-hosting (`PALLETDOCK_PLAYGROUND_ENABLED=1`) |
 
 The [consumer example](docs/CONSUMER.md) is a separate app-side reader of the public `/v1` API. It shows how another application can display indexed values, coverage, freshness, and unknown finality while keeping its read key server-side.
 
@@ -118,7 +179,7 @@ pnpm owner:create --email you@example.com
 
 The owner command prompts for a password of at least 12 characters. Running it again for the same email resets only that account and revokes only its sessions.
 
-**Playground.** With `PALLETDOCK_PLAYGROUND_ENABLED=1`, `/playground` starts a temporary workspace without an account. It lasts 6 hours from the start (never extended) and holds one project, up to 2 contracts, 1 indexer source, and 1 read key. Deploying and writing are real testnet transactions signed in the visitor's wallet, so they need test tPOT. **Save workspace** converts it into an account through the registration flow below. Lifecycle, limits, expiry, and conversion: [docs/PLAYGROUND.md](docs/PLAYGROUND.md). The playground is verified on the local fixture stack only, not yet on the hosted deployment.
+**Playground.** With `PALLETDOCK_PLAYGROUND_ENABLED=1`, `/playground` starts a temporary workspace without an account. It lasts 6 hours from the start (never extended) and holds one project, up to 2 contracts, 1 indexer source, and 1 read key. Deploying and writing are real testnet transactions signed in the visitor's wallet, so they need test tPOT. **Save workspace** converts it into an account through the registration flow below. Lifecycle, limits, expiry, and conversion: [docs/PLAYGROUND.md](docs/PLAYGROUND.md). On the hosted deployment, starting a workspace was checked on 2026-10-31. The signed deploy, write, index, and API journey is verified on the local fixture stack; a hosted run on Portaldot V3 Testnet is not recorded yet.
 
 Self-service registration is disabled by default. Set `PALLETDOCK_SIGNUP_MODE=invite` with a server-side `PALLETDOCK_SIGNUP_INVITE_CODE` of at least 16 characters to let users create their own isolated accounts at `/signup`. `open` mode removes the code requirement, but should not be exposed long-term without deployment-level CAPTCHA, quotas, and abuse monitoring. The hosted demo runs in `open` mode during hackathon judging, with per-visitor sign-up and sign-in rate limits; it returns to `invite` or `disabled` afterwards.
 
