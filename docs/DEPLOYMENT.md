@@ -96,6 +96,12 @@ PALLETDOCK_PLAYGROUND_MAX_CONTRACTS=2
 PALLETDOCK_PLAYGROUND_MAX_INDEXER_SOURCES=1
 PALLETDOCK_PLAYGROUND_MAX_READ_KEYS=1
 PALLETDOCK_PLAYGROUND_MAX_ACTIONS=150            # mutating or RPC-backed workspace requests per guest
+# Optional, per template: an already deployed copy visitors use instead of deploying (and paying its storage deposit).
+# Format 0x<address>:<deployment block>[:0x<deployment tx hash>]; its runtime code must match the bundled artifact.
+PALLETDOCK_PLAYGROUND_SHARED_STORAGE=
+PALLETDOCK_PLAYGROUND_SHARED_PAYMENTS=
+PALLETDOCK_PLAYGROUND_SHARED_ERC20=
+PALLETDOCK_PLAYGROUND_SHARED_ERC721=
 ```
 
 It needs migration `0004_guest_playground.sql` (applied by the normal pre-deploy migration) and a worker built from the same commit: the worker skips expired guests when claiming indexer work and polling receipts, and runs the expiry maintenance pass. Without `PALLETDOCK_PROXY_SECRET` on both services, every visitor shares the proxy's address for the start limit. Saving a temporary workspace uses the signup mode below; with `PALLETDOCK_SIGNUP_MODE=disabled`, guests are told that saving is unavailable. See [PLAYGROUND.md](PLAYGROUND.md).

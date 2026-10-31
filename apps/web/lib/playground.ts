@@ -25,6 +25,15 @@ export interface PlaygroundTemplate {
   write: PlaygroundCall & { explicitValue?: boolean; requiredInputs?: number[] };
   event: { name: string; signature: string; fields: string[]; explain: string };
   notes: string[];
+  /** Differences on the operator's shared copy; the guide's template already has them applied. */
+  shared: { read?: PlaygroundCall; write?: PlaygroundTemplate['write']; event?: PlaygroundTemplate['event']; notes: string[] };
+  /** The operator's already deployed copy (config only); null when visitors deploy their own. */
+  sharedContract?: SharedContract | null;
+}
+export interface SharedContract {
+  address: string;
+  deployBlock: string;
+  deployTxHash: string | null;
 }
 export interface PlaygroundConfig {
   enabled: boolean;
@@ -37,7 +46,9 @@ export interface PlaygroundConfig {
 export type GuideState = 'done' | 'in_progress' | 'todo' | 'attention';
 export interface Guide {
   template: PlaygroundTemplate | null;
-  contract: { id: string; name: string; address: string; deploy_block: string | null } | null;
+  sharedContract: SharedContract | null;
+  /** shared: the operator's copy, tracked in this project since attached_block. */
+  contract: { id: string; name: string; address: string; deploy_block: string | null; shared: boolean; attached_block: string | null } | null;
   deploy: { id: string; hash: string | null; submission_status: string; execution_status: string } | null;
   read: { function: string; blockNumber: string; at: string } | null;
   interaction: { id: string; hash: string | null; execution_status: string; block_number: string | null } | null;

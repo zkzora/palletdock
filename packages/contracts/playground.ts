@@ -35,6 +35,16 @@ export interface PlaygroundTemplate {
   };
   event: { name: string; signature: string; fields: string[]; explain: string };
   notes: string[];
+  /**
+   * Differences when the visitor uses the operator's shared, already deployed contract
+   * instead of deploying a copy (see sharedVariant()). Omitted fields stay the same.
+   */
+  shared: {
+    write?: PlaygroundTemplate['write'];
+    event?: PlaygroundTemplate['event'];
+    read?: PlaygroundCall;
+    notes: string[];
+  };
 }
 
 export const PLAYGROUND_TEMPLATES: readonly PlaygroundTemplate[] = [
@@ -56,6 +66,10 @@ export const PLAYGROUND_TEMPLATES: readonly PlaygroundTemplate[] = [
       explain: 'caller is the signing account (indexed topic); previousValue and newValue are decoded from the log data.',
     },
     notes: [],
+    shared: {
+      read: { function: 'retrieve()', args: [], explain: 'retrieve() returns the stored number through eth_call. Nothing is broadcast. The contract is shared, so it may already hold another visitor’s number.' },
+      notes: ['Every visitor writes to the same shared contract, so previousValue in your event may come from someone else.'],
+    },
   },
   {
     id: 'payments',
@@ -83,6 +97,10 @@ export const PLAYGROUND_TEMPLATES: readonly PlaygroundTemplate[] = [
       'The order reference is a sample: the ASCII text "pd-sample-order-" plus part of this project id, zero-padded to 32 bytes.',
       'withdraw(to) sends the whole contract balance to an address and only the deploying account (owner) may call it. The playground never initiates it; you can call it yourself from the Write tab.',
     ],
+    shared: {
+      read: { function: 'totalReceived()', args: [], explain: 'totalReceived() is the sum of all payments the shared contract ever received, from every visitor, in raw EVM base units.' },
+      notes: ['On the shared contract the owner is the PalletDock operator: a payment you send stays in that contract and only the operator can withdraw it. Send a small amount.'],
+    },
   },
   {
     id: 'erc20',
@@ -110,6 +128,21 @@ export const PLAYGROUND_TEMPLATES: readonly PlaygroundTemplate[] = [
       explain: 'from and to are indexed topics; value is in smallest units.',
     },
     notes: ['PDTT is a test token with no value. Token amounts are lossless decimal strings.'],
+    shared: {
+      write: {
+        function: 'approve(address,uint256)',
+        args: ['{signer}', '1000000000000000000'],
+        requiredInputs: [0],
+        explain: 'approve(spender, value) records an allowance and moves no tokens, so it works without holding PDTT. The spender is prefilled with your own address; 1000000000000000000 = 1 PDTT.',
+      },
+      event: {
+        name: 'Approval',
+        signature: 'Approval(address,address,uint256)',
+        fields: ['owner', 'spender', 'value'],
+        explain: 'owner and spender are indexed topics; value is the allowance in smallest units.',
+      },
+      notes: ['The whole supply of the shared token belongs to the PalletDock operator, so you hold no PDTT and the guided write is approve instead of transfer. Deploy your own copy to transfer tokens.'],
+    },
   },
   {
     id: 'erc721',
@@ -134,6 +167,10 @@ export const PLAYGROUND_TEMPLATES: readonly PlaygroundTemplate[] = [
       explain: 'A mint is a Transfer from the zero address. All three fields are indexed topics.',
     },
     notes: ['No base URI is set, so tokenURI(tokenId) returns an empty string for a minted token and reverts for one that does not exist. There is no burn function.'],
+    shared: {
+      read: { function: 'nextTokenId()', args: [], explain: 'nextTokenId() is the id the next mint will use. Every visitor mints on the shared contract, so it counts their tokens too.' },
+      notes: ['Minting stores a new token, so it needs a small storage deposit on top of the fee.'],
+    },
   },
 ];
 
@@ -146,6 +183,40 @@ export function sampleOrderRef(projectId: string): string {
   const text = `pd-sample-order-${projectId.replace(/-/g, '').slice(0, 8)}`;
   const hex = Buffer.from(text, 'ascii').toString('hex');
   return `0x${hex.padEnd(64, '0')}`;
+}
+
+/** The template as it applies to the operator's shared contract: the shared overrides plus their notes. */
+export function sharedVariant(t: PlaygroundTemplate): PlaygroundTemplate {
+  const s = t.shared;
+  return { ...t, read: s.read ?? t.read, write: s.write ?? t.write, event: s.event ?? t.event, notes: [...t.notes, ...s.notes] };
+}
+
+/**
+ * True when on-chain runtime code is the artifact's deployed bytecode. Immutable values are
+ * written into the code at deployment (for example PalletDockPayments' owner), so a byte may
+ * differ only inside a run of at least 32 zero bytes in the artifact, which is where solc
+ * leaves an immutable's placeholder. Anything else is a different contract.
+ */
+export function codeMatchesArtifact(onchain: string, deployedBytecode: string): { match: boolean; immutablesFilled: boolean } {
+  const a = onchain.toLowerCase().replace(/^0x/, '');
+  const b = deployedBytecode.toLowerCase().replace(/^0x/, '');
+  if (!a || a.length !== b.length) return { match: false, immutablesFilled: false };
+  if (a === b) return { match: true, immutablesFilled: false };
+  const bytes = b.length / 2;
+  const byte = (s: string, i: number) => s.slice(i * 2, i * 2 + 2);
+  const inZeroRun = new Uint8Array(bytes);
+  for (let i = 0; i < bytes; ) {
+    if (byte(b, i) !== '00') {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < bytes && byte(b, j) === '00') j++;
+    if (j - i >= 32) inZeroRun.fill(1, i, j);
+    i = j;
+  }
+  for (let i = 0; i < bytes; i++) if (byte(a, i) !== byte(b, i) && !inZeroRun[i]) return { match: false, immutablesFilled: false };
+  return { match: true, immutablesFilled: true };
 }
 
 /** Template with project-specific placeholders resolved (everything except {signer}). */

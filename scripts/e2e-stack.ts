@@ -10,7 +10,7 @@
  * Results from this stack are fixture results, never live testnet evidence.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, openSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, openSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -126,6 +126,15 @@ try {
   const genesis = (await rpc('eth_getBlockByNumber', ['0x0', false])).hash as string;
   log(`fixture chain ready (genesis ${genesis.slice(0, 12)}…)`);
 
+  // Operator-shared Storage for the playground (other templates stay deploy-your-own), from the
+  // last unlocked fixture account, which no test signs with (the fixture wallet uses accounts[0]).
+  const storageArtifact = JSON.parse(readFileSync(path.join(ROOT, 'packages/contracts/artifacts/PalletDockStorage.json'), 'utf8'));
+  const sharedTx: string = await rpc('eth_sendTransaction', [{ from: accounts[accounts.length - 1], data: storageArtifact.bytecode }]);
+  const sharedReceipt = await rpc('eth_getTransactionReceipt', [sharedTx]);
+  if (sharedReceipt?.status !== '0x1') throw new Error('shared Storage deployment failed on the fixture chain');
+  const sharedStorage = `${sharedReceipt.contractAddress}:${BigInt(sharedReceipt.blockNumber)}:${sharedTx}`;
+  log(`shared playground Storage at ${sharedReceipt.contractAddress}`);
+
   // 3. Owner + fixture fingerprint
   const email = 'e2e-owner@palletdock.test';
   const password = randomBytes(18).toString('base64url');
@@ -164,6 +173,7 @@ try {
     // Playground on, with a start limit that fits every E2E guest coming from one local address.
     PALLETDOCK_PLAYGROUND_ENABLED: '1',
     PALLETDOCK_PLAYGROUND_STARTS_PER_HOUR: '60',
+    PALLETDOCK_PLAYGROUND_SHARED_STORAGE: sharedStorage,
   });
   // Hardhat mines a block only per transaction and serves its logs immediately, so no confirmation lag.
   run('worker', ['--filter', '@palletdock/worker', 'start'], { ...common, PALLETDOCK_INDEX_LAG_BLOCKS: '0' });
@@ -173,7 +183,7 @@ try {
   log('api and web ready');
 
   // databaseUrl points at this throwaway embedded PostgreSQL (fixture only); the playground E2E uses it to end a guest's lifetime.
-  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, databaseUrl: DATABASE_URL, email, password, signupInviteCode, accounts, consumerConfig, fixture: true };
+  const state = { webUrl: `http://127.0.0.1:${PORTS.web}`, apiUrl: `http://127.0.0.1:${PORTS.api}`, rpcUrl: `http://127.0.0.1:${PORTS.rpc}`, databaseUrl: DATABASE_URL, email, password, signupInviteCode, accounts, consumerConfig, sharedStorage: sharedReceipt.contractAddress, fixture: true };
   writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2));
   log(`ready: ${state.webUrl} (state in .data/e2e/state.json)`);
   // Keep running until SIGINT/SIGTERM (Playwright global teardown or Ctrl+C).

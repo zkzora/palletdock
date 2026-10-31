@@ -16,6 +16,11 @@ import { setSessionCookie } from './registration.js';
 export const PLAYGROUND_INTENT_HEADER = 'x-palletdock-intent';
 const GUEST_CREATE_LOCK = 727101;
 
+/** Addresses of the shared template contracts: tracking one never counts toward a guest's contract quota. */
+export function sharedAddresses(config: GuestConfig = resolveGuestConfig()): string[] {
+  return Object.values(config.shared).map((s) => s!.address);
+}
+
 export function guestLimits(config: GuestConfig) {
   return { projects: 1, contracts: config.maxContracts, indexerSources: config.maxSources, readKeys: config.maxKeys, actions: config.maxActions };
 }
@@ -25,11 +30,11 @@ export async function guestUsage(pool: pg.Pool, ownerId: string) {
   const config = resolveGuestConfig();
   const r = await pool.query(
     `SELECT o.guest_actions,
-            (SELECT count(*)::int FROM contracts c JOIN projects p ON p.id=c.project_id WHERE p.owner_id=o.id AND c.removed_at IS NULL) AS contracts,
+            (SELECT count(*)::int FROM contracts c JOIN projects p ON p.id=c.project_id WHERE p.owner_id=o.id AND c.removed_at IS NULL AND NOT (lower(c.address) = ANY($2::text[]))) AS contracts,
             (SELECT count(*)::int FROM indexer_sources s JOIN projects p ON p.id=s.project_id WHERE p.owner_id=o.id AND s.desired_state <> 'deleted') AS sources,
             (SELECT count(*)::int FROM api_keys k JOIN projects p ON p.id=k.project_id WHERE p.owner_id=o.id AND k.revoked_at IS NULL AND k.expires_at > now()) AS keys
        FROM owners o WHERE o.id=$1`,
-    [ownerId],
+    [ownerId, sharedAddresses(config)],
   );
   const row = r.rows[0] ?? { guest_actions: 0, contracts: 0, sources: 0, keys: 0 };
   return { limits: guestLimits(config), used: { contracts: row.contracts, indexerSources: row.sources, readKeys: row.keys, actions: row.guest_actions } };
@@ -37,16 +42,20 @@ export async function guestUsage(pool: pg.Pool, ownerId: string) {
 
 // ---------------------------------------------------------------- quotas (call inside a transaction after lockProject)
 
-/** Tracked contracts plus deployments that may still create one (submitted, or prepared in the last 30 minutes). */
+/**
+ * Tracked contracts plus deployments that may still create one (submitted, or prepared in the
+ * last 30 minutes). Shared template contracts are excluded: they are a fixed, operator-set list.
+ */
 export async function assertContractQuota(client: pg.PoolClient, auth: SessionAuth, projectId: string): Promise<void> {
   if (auth.kind !== 'guest') return;
-  const max = resolveGuestConfig().maxContracts;
+  const config = resolveGuestConfig();
+  const max = config.maxContracts;
   const r = await client.query(
-    `SELECT (SELECT count(*)::int FROM contracts WHERE project_id=$1 AND removed_at IS NULL)
+    `SELECT (SELECT count(*)::int FROM contracts WHERE project_id=$1 AND removed_at IS NULL AND NOT (lower(address) = ANY($2::text[])))
           + (SELECT count(*)::int FROM transactions t WHERE t.project_id=$1 AND t.kind='deploy' AND t.contract_id IS NULL AND t.execution_status <> 'reverted'
                AND ((t.submission_status IN ('submitted','unknown') AND t.tracking_status='active')
                     OR (t.submission_status='prepared' AND t.created_at > now() - interval '30 minutes'))) AS used`,
-    [projectId],
+    [projectId, sharedAddresses(config)],
   );
   if (r.rows[0].used >= max) {
     throw new QuotaError(
@@ -85,7 +94,8 @@ export function registerPlaygroundRoutes(app: FastifyInstance, pool: pg.Pool, cu
       lifetimeMinutes: config.lifetimeMinutes,
       limits: guestLimits(config),
       network: { name: PORTALDOT_V3_TESTNET.name, evmChainId: PORTALDOT_V3_TESTNET.evmChainId },
-      templates: PLAYGROUND_TEMPLATES,
+      // `shared` is the operator's already deployed copy, or null when visitors deploy their own.
+      templates: PLAYGROUND_TEMPLATES.map((t) => ({ ...t, sharedContract: config.shared[t.id] ?? null })),
     };
   });
 

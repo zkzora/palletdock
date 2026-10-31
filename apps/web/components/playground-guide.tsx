@@ -27,6 +27,15 @@ const STATE_LABEL: Record<GuideState, string> = { done: 'Done', in_progress: 'In
  * GET /playground, which derives it from records the server or worker observed;
  * the buttons here only navigate or perform an explicit action.
  */
+/** Whether a template has the operator's shared copy (no deployment) or must be deployed by the visitor. */
+export function SharedBadge({ shared }: { shared: boolean }) {
+  return (
+    <span className={shared ? 'success-text' : 'dim'} style={{ fontSize: 11.5 }}>
+      {shared ? 'Ready: shared contract, no deployment' : 'You deploy it (needs a tPOT storage deposit)'}
+    </span>
+  );
+}
+
 export function PlaygroundGuide() {
   const { projectId, project, request, href, readOnly } = useWorkspace();
   const wallet = useWallet();
@@ -74,6 +83,19 @@ export function PlaygroundGuide() {
     }
   }
 
+  async function addSharedContract() {
+    setActionError('');
+    setBusy('shared');
+    try {
+      await request(`/workspace/projects/${projectId}/playground/shared-contract`, { method: 'POST' });
+      await reload();
+    } catch (e) {
+      setActionError((e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function startIndexing(startBlock?: string) {
     if (!guide?.contract) return;
     setActionError('');
@@ -100,10 +122,18 @@ export function PlaygroundGuide() {
     const c = guide.contract;
     switch (id) {
       case 'deploy':
-        return c ? null : (
-          <Link className="mini-button" href={href(`/app/contracts/deploy?template=${tpl.id}`)}>
-            Open deploy
-          </Link>
+        if (c) return null;
+        return (
+          <span className="guide-actions">
+            {guide.sharedContract && !readOnly && (
+              <button className="mini-button" onClick={() => void addSharedContract()} disabled={!!busy} aria-busy={busy === 'shared'}>
+                {busy === 'shared' ? 'Checking contract…' : 'Use shared contract'}
+              </button>
+            )}
+            <Link className="mini-button" href={href(`/app/contracts/deploy?template=${tpl.id}`)}>
+              {guide.sharedContract ? 'Deploy your own' : 'Open deploy'}
+            </Link>
+          </span>
         );
       case 'read':
         return c ? (
@@ -170,6 +200,7 @@ export function PlaygroundGuide() {
                   <button key={t.id} className="choice" onClick={() => void chooseTemplate(t.id)} disabled={!!busy || readOnly} aria-busy={busy === `template:${t.id}`}>
                     <strong style={{ fontSize: 13.5 }}>{t.title}</strong>
                     <span className="dim" style={{ fontSize: 12 }}>{t.outcome}</span>
+                    <SharedBadge shared={!!t.sharedContract} />
                   </button>
                 ))}
               </div>
@@ -194,14 +225,22 @@ export function PlaygroundGuide() {
               {guide.contract && !guide.source && !readOnly && (
                 <Notice
                   tone={guide.steps.find((s) => s.id === 'event')?.state === 'attention' ? 'warning' : 'info'}
-                  title={`Index ${tpl.event.name} from the deployment block`}
+                  title={guide.contract.shared ? `Index ${tpl.event.name} before you write` : `Index ${tpl.event.name} from the deployment block`}
                   action={
                     <button className="button secondary" onClick={() => void startIndexing()} disabled={!!busy} aria-busy={busy === 'source'}>
                       {busy === 'source' ? 'Checking block…' : 'Start indexing'}
                     </button>
                   }
                 >
-                  Creates one log source for {tpl.event.signature} starting at block {guide.contract.deploy_block ? groupDigits(guide.contract.deploy_block) : 'unknown'}, so events emitted while you continue are covered. The node only keeps recent history, so do this soon after deploying. Running it again reuses the same source.
+                  {guide.contract.shared ? (
+                    <>
+                      Creates one log source for {tpl.event.signature} starting at block {guide.contract.attached_block ? groupDigits(guide.contract.attached_block) : 'unknown'}, where this workspace added the shared contract, so your own write is covered. Earlier events of the shared contract, from other visitors, are not indexed here. Running it again reuses the same source.
+                    </>
+                  ) : (
+                    <>
+                      Creates one log source for {tpl.event.signature} starting at block {guide.contract.deploy_block ? groupDigits(guide.contract.deploy_block) : 'unknown'}, so events emitted while you continue are covered. The node only keeps recent history, so do this soon after deploying. Running it again reuses the same source.
+                    </>
+                  )}
                 </Notice>
               )}
               {recovery && (

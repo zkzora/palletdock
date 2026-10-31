@@ -62,9 +62,25 @@ Template definitions live once in `packages/contracts/playground.ts` and are ser
 | ERC-20 (`PalletDockToken`) | `initialSupply = 1000000000000000000000` (1,000 PDTT at 18 decimals, minted to the deployer) | `totalSupply()` | `transfer(to, 1000000000000000000)`; the recipient must be entered and be a valid address | `Transfer(from, to, value)` |
 | ERC-721 (`PalletDockCollectible`) | none | `nextTokenId()` | `mint(to)` prefilled with the connected account; the contract lets anyone mint to any address | `Transfer(from, to, tokenId)` |
 
+### Shared template contracts (no deployment)
+
+Deploying on Portaldot V3 Testnet needs a storage deposit for the contract code, included in the EVM gas: `revive.depositPerByte` is 0.06 tPOT per byte plus a 30% code-hash lockup (runtime constants read on 2026-10-31). Estimated from a funded account that day, deploying cost about 13 tPOT for Storage, 77 tPOT for Payments, and 343 tPOT for ERC-721. A write to an existing Storage contract was about 0.016 tPOT. So the operator can deploy each template once and share it:
+
+```text
+PALLETDOCK_PLAYGROUND_SHARED_STORAGE=0x<address>:<deployment block>[:0x<deployment tx hash>]
+PALLETDOCK_PLAYGROUND_SHARED_PAYMENTS=…   PALLETDOCK_PLAYGROUND_SHARED_ERC20=…   PALLETDOCK_PLAYGROUND_SHARED_ERC721=…
+```
+
+- `GET /auth/playground-config` lists the shared copy per template (`sharedContract`, or `null`). The `/playground` page and the guide mark those templates *Ready: shared contract, no deployment*; the others say the visitor deploys them.
+- Starting a workspace on such a template, switching to it, or **Use shared contract** calls `POST /workspace/projects/:id/playground/shared-contract`. It is idempotent. Before tracking the contract, the server reads its runtime code at the current head and compares it with the bundled artifact's `deployedBytecode`. Bytes may differ only inside a run of 32 or more zero bytes in the artifact, where solc leaves an immutable's placeholder (Payments' owner). Any other difference refuses the contract. The check block is recorded and shown in the checklist.
+- A shared copy never counts toward the guest's contract quota, so the visitor can still deploy or import two contracts of their own. The visitor's own deployed copy of the same template takes precedence in the checklist.
+- **Indexing** a shared copy starts at the block where this workspace added it, not at its deployment block: every earlier event came from other visitors. The response returns that uncovered range and it is logged as INFO in Monitoring.
+- On the shared ERC-20 the visitor holds no PDTT, so the guided write is `approve(spender, 1 PDTT)` with the event `Approval(owner, spender, value)` instead of `transfer`. Payments sent to the shared Payments contract stay in it and only the operator (its owner) can withdraw them; the template notes say so.
+- A shared Storage, Payments, or ERC-721 contract is written by every visitor, so `retrieve()`, `totalReceived()`, and `nextTokenId()` include other visitors' actions. The checklist still completes only from this visitor's own transaction hash.
+
 `withdraw(to)` on Payments is owner-only and is explained but never started automatically. The checklist (`GET /workspace/projects/:id/playground`) has six steps: choose template → deploy → read → example interaction → indexed event → application API query. Each state is derived from records the server or worker observed:
 
-- **Deploy** is done when the worker tracked the template's contract from a successful deployment receipt.
+- **Deploy** (titled *Use the contract* with a shared copy) is done when the worker tracked the template's contract from a successful deployment receipt, or when the shared copy was added after its code check.
 - **Read** is done when the server decoded a successful `eth_call` on that contract (stored in `projects.playground_progress`).
 - **Interaction** is done when the template's write has a successful receipt. Rejected, unconfirmed, reverted, or reorganized submissions show as *needs attention* with the reason, and nothing is resent.
 - **Event** is done when the template event from that write's transaction hash is indexed and decoded.
@@ -88,20 +104,21 @@ Pressing a button never completes a step. All six steps run through the same pro
 
 1. Add `PALLETDOCK_PLAYGROUND_ENABLED=1` to `.env`, then run `pnpm db:start`, `pnpm db:migrate`, `pnpm dev:api`, `pnpm dev:worker`, `pnpm dev:web`.
 2. Open `http://127.0.0.1:3001/` → **Try Playground** → choose **Storage** → **Start temporary workspace**.
-3. In the guide: **Open deploy** → connect MetaMask on Portaldot V3 Testnet that holds test tPOT → review the *Real testnet transaction* → sign. This sends a live testnet transaction; use the fixture stack below to avoid that.
-4. **Start indexing** → **Open retrieve()** → **Read** → **Prepare store(uint256)** → review and sign → wait until the event step is observed → **Open API playground** → **Create read key for this workspace** → **Send request**.
+3. With `PALLETDOCK_PLAYGROUND_SHARED_STORAGE` set, the shared contract is added at start. Otherwise use **Open deploy** → connect MetaMask on Portaldot V3 Testnet that holds test tPOT → review the *Real testnet transaction* → sign.
+4. **Start indexing** → **Open retrieve()** → **Read** → connect MetaMask → **Prepare store(uint256)** → review and sign → wait until the event step is observed → **Open API playground** → **Create read key for this workspace** → **Send request**. Signing sends a live testnet transaction; use the fixture stack below to avoid that.
 5. **Save workspace** to keep it, or let it expire.
 
 To try everything without live transactions, run `pnpm e2e:stack` (fixture Hardhat chain, labelled FIXTURE NETWORK, playground enabled) and `pnpm --filter @palletdock/web exec playwright test -c playwright.fixture.config.ts fixture-playground`.
 
-## Verification status (2026-10-30, local Windows working copy)
+## Verification status (2026-10-30, shared contracts added 2026-10-31; local Windows working copy)
 
 | Check | Result |
 | --- | --- |
 | `pnpm typecheck` | all 7 packages pass |
 | `pnpm --filter @palletdock/contracts check` | committed artifacts unchanged (exit 0) |
-| `pnpm test` | 21 files, 192 tests pass. New: `apps/api/test/playground.test.ts` (21 tests: explicit start only, hashed token and cookie flags, account session kept, trusted-address start limit and capacity under concurrency, guest A/B isolation, CSRF, restrictions, concurrent key/contract/source/action quotas, idempotent source setup, unavailable-history recovery, observed-only checklist, expiry before maintenance, conversion success and failures, no credentials in responses or request logs) and `apps/worker/test/guest-expiry.test.ts` (5 tests: claim exclusion, commit fenced when a guest expires mid-claim, no receipt polling, idempotent multi-instance maintenance, credential constraint) |
+| `pnpm test` (2026-10-31) | 21 files, 200 tests pass. Shared contracts: config and parsing, code check against the artifact (exact or immutables only, mismatch refused), idempotent add outside the contract quota, indexing from the block where the workspace added it with the uncovered range logged, ERC-20 approve variant. Earlier run (2026-10-30): 192 tests. New: `apps/api/test/playground.test.ts` (21 tests: explicit start only, hashed token and cookie flags, account session kept, trusted-address start limit and capacity under concurrency, guest A/B isolation, CSRF, restrictions, concurrent key/contract/source/action quotas, idempotent source setup, unavailable-history recovery, observed-only checklist, expiry before maintenance, conversion success and failures, no credentials in responses or request logs) and `apps/worker/test/guest-expiry.test.ts` (5 tests: claim exclusion, commit fenced when a guest expires mid-claim, no receipt polling, idempotent multi-instance maintenance, credential constraint) |
 | `pnpm --filter @palletdock/web build` | passes; `/playground` is static |
-| Fixture browser E2E (`pnpm e2e:stack`, Hardhat chain labelled FIXTURE NETWORK, fixture wallet) | `fixture-playground.spec.ts` passes on desktop: Storage end to end through deploy, read, `store(42)`, indexed `NumberChanged`, `/v1` events, refresh, and Save workspace; Payments, ERC-20, and ERC-721 through their indexed events; wrong chain switched plus wallet rejection completing nothing; expiry page; account kept with a guided sample project. Mobile layout test passes. The existing fixture specs (flow, payments, consumer, signup, screens) pass |
+| Fixture browser E2E, 2026-10-31 | The stack deploys a shared Storage first. `fixture-playground.spec.ts` passes on desktop (8 tests): Storage on the shared contract with no deployment, through read, `store(42)`, indexed `NumberChanged`, `/v1` events, refresh, and Save workspace; the other templates deploy their own copy. The flow, payments, consumer, and signup specs pass on desktop. |
+| Fixture browser E2E, 2026-10-30 (`pnpm e2e:stack`, Hardhat chain labelled FIXTURE NETWORK, fixture wallet) | `fixture-playground.spec.ts` passes on desktop: Storage end to end through deploy, read, `store(42)`, indexed `NumberChanged`, `/v1` events, refresh, and Save workspace; Payments, ERC-20, and ERC-721 through their indexed events; wrong chain switched plus wallet rejection completing nothing; expiry page; account kept with a guided sample project. Mobile layout test passes. The existing fixture specs (flow, payments, consumer, signup, screens) pass |
 
-All of this uses local fixtures. The playground has **not** been run against the hosted deployment or Portaldot V3 Testnet, no live transaction was sent, and migration `0004` has not been applied to the hosted database.
+All of this uses local fixtures. On the hosted deployment (2026-10-31), migration `0004` is applied and starting a workspace was checked; no playground transaction there has been recorded yet. The existing Storage contract `0xdd982913cb04f9e438437e2137ba1452e4b211ed` (deployed in block 133019) has runtime code identical to the bundled artifact, so it can be the hosted shared Storage.

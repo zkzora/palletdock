@@ -14,7 +14,8 @@ The hosted app runs at **[palletdock.vercel.app](https://palletdock.vercel.app/)
 
 1. Open **[palletdock.vercel.app/playground](https://palletdock.vercel.app/playground)**, choose **Storage**, and click **Start temporary workspace**.
 2. You land in the real dashboard as a temporary guest, with no email or password. The workspace lasts 6 hours.
-3. Follow the guide at the top of the page. Every area can be opened: Contracts, Transactions, Indexer, API, and Monitoring. Deploying and writing need a wallet with test tPOT (path 3).
+3. Follow the guide at the top of the page. Storage is ready to use: a shared copy is already deployed on the testnet and added to your workspace, so there is nothing to deploy. Reading it is free. Every area can be opened: Contracts, Transactions, Indexer, API, and Monitoring.
+4. The one paid step is the example write, `store(42)`, at about 0.02 tPOT (estimated on 2026-10-31). It needs a wallet with test tPOT (path 3). The other templates are deployed from your own wallet, which needs a storage deposit for the contract code: about 77 tPOT for Payments and 343 tPOT for ERC-721 (estimated on 2026-10-31).
 
 **Test accounts:** none are needed. The Playground replaces a shared login, and nobody else sees your workspace. To keep it, click **Save workspace**: that creates your own account (email and password) and keeps everything. You can also [sign up](https://palletdock.vercel.app/signup) directly; registration is open.
 
@@ -51,7 +52,7 @@ Block hashes, the indexed record, the API request ID, and screenshots are in [Te
    1. In PalletDock, open **Overview → Account mapping → Resolve funding account**. It shows your MetaMask address and the native account (SS58) that the runtime maps to it.
    2. Post a request in the Portaldot Discord with both addresses. A request template is in [Funding](https://palletdock.vercel.app/docs/funding).
    3. When the tPOT arrives, the signing review shows your balance. Signing stays blocked while the balance is too low for the fee.
-4. **Run the guide.** Open deploy, review the **Real testnet transaction**, and sign. Then run `retrieve()`, sign `store(42)`, start indexing, and open the API playground. A step turns done only from what was observed: a receipt, a decoded event, or a `200` API answer. Clicking a step never marks it done.
+4. **Run the guide** on Storage. Click **Start indexing**, run `retrieve()`, then review the **Real testnet transaction** for `store(42)` and sign it. When the event is indexed, open the API playground and send the request. A step turns done only from what was observed: a receipt, a decoded event, or a `200` API answer. Clicking a step never marks it done.
 
 ### 4. Run it locally without test tokens
 

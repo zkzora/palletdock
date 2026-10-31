@@ -7,6 +7,7 @@ import { PublicPage, Section, Para } from '@/components/public-page';
 import { Notice } from '@/components/ui';
 import { api, type ApiError } from '@/lib/api';
 import { PLAYGROUND_INTENT, lifetimeLabel, usePlaygroundConfig, type PlaygroundTemplate } from '@/lib/playground';
+import { SharedBadge } from '@/components/playground-guide';
 import type { Owner, SessionInfo } from '@/lib/types';
 
 type Me = { owner: Owner; session: SessionInfo; csrfToken: string } | null;
@@ -33,7 +34,7 @@ export default function PlaygroundPage() {
     setError('');
     setBusy(true);
     try {
-      const r = await api<{ created: boolean; session: SessionInfo; projectId: string | null }>('/auth/playground', {
+      const r = await api<{ created: boolean; session: SessionInfo; projectId: string | null; csrfToken?: string }>('/auth/playground', {
         method: 'POST',
         headers: PLAYGROUND_INTENT,
         body: JSON.stringify({ template: choice }),
@@ -42,6 +43,11 @@ export default function PlaygroundPage() {
         setError('You are already signed in. Your account stays signed in; open your workspace or create a sample project below.');
         setMe(await api<NonNullable<Me>>('/auth/me').catch(() => null));
         return;
+      }
+      // Add the shared, already deployed copy so the visitor can skip deployment. If it fails,
+      // the guide offers the same action again (and deploying their own).
+      if (r.created && r.projectId && r.csrfToken && config?.templates.find((t) => t.id === choice)?.sharedContract) {
+        await api(`/workspace/projects/${r.projectId}/playground/shared-contract`, { method: 'POST', headers: { 'x-csrf-token': r.csrfToken } }).catch(() => undefined);
       }
       router.push(r.projectId ? `/app?project=${r.projectId}` : '/app');
     } catch (e) {
@@ -111,7 +117,7 @@ export default function PlaygroundPage() {
       )}
 
       <Section title="Choose a template">
-        <Para text="Each template is a bundled, reproducibly compiled contract. You can read its steps now; nothing is deployed until you review and sign in your wallet." />
+        <Para text="Each template is a bundled, reproducibly compiled contract. Templates marked ready already have a shared copy on the testnet, so you skip deployment and only sign a small write. For the others you deploy your own copy, which needs a storage deposit in test tPOT that grows with the contract's size. Nothing is sent until you review and sign in your wallet." />
         {!config ? (
           <div className="skeleton" style={{ height: 160 }} aria-busy="true" />
         ) : (
@@ -122,8 +128,9 @@ export default function PlaygroundPage() {
                 <span className="dim" style={{ fontSize: 12.5 }}>{t.summary}</span>
                 <span style={{ fontSize: 12.5, color: '#c4c8ce', lineHeight: 1.5 }}>{t.outcome}</span>
                 <span className="mono dim" style={{ fontSize: 11.5 }}>
-                  {t.contractName} · event {t.event.signature}
+                  {t.contractName} · event {(t.sharedContract ? (t.shared.event ?? t.event) : t.event).signature}
                 </span>
+                <SharedBadge shared={!!t.sharedContract} />
               </button>
             ))}
           </div>

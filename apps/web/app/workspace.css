@@ -84,6 +84,7 @@
 .guide-body { display: flex; flex-direction: column; gap: 10px; }
 .guide-templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 8px; }
 .guide-templates .mini-button { justify-self: start; }
+.guide-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .guide-steps { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 6px 16px; }
 .guide-steps li { display: flex; align-items: flex-start; gap: 9px; padding: 6px 0; font-size: 12.5px; line-height: 1.45; }
 .guide-steps li strong { display: block; font-size: 13px; font-weight: 600; }

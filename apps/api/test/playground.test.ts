@@ -3,9 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { encodeFunctionResult, type Abi } from 'viem';
 import { EvmAdapter, RpcResponseError, type RpcCaller } from '@palletdock/chain';
 import { PORTALDOT_V3_TESTNET } from '@palletdock/shared';
-import { sampleArtifacts, sampleOrderRef } from '@palletdock/contracts';
+import { codeMatchesArtifact, sampleArtifacts, sampleOrderRef } from '@palletdock/contracts';
 import { createTestDatabase, expireGuest, seedWorkspace, type TestDatabase } from '../../../test-support/db.js';
 import { buildServer } from '../src/server.js';
+import { resolveGuestConfig } from '../src/guest-config.js';
 
 /**
  * Temporary playground workspaces: creation, isolation, quotas, expiry, the guided
@@ -15,6 +16,16 @@ const PROXY_SECRET = 'playground-test-proxy-secret-0123456789abcdef';
 const INTENT = { 'x-palletdock-intent': 'start-playground' };
 const FROM = '0x7a3f09c2d4e81b6a5f3c90e7d12b48a6e0f9c315';
 const STORAGE = sampleArtifacts().find((s) => s.id === 'storage')!.artifact;
+const TOKEN = sampleArtifacts().find((s) => s.id === 'erc20')!.artifact;
+// Operator-shared template contracts on the fake chain (runtime code per address).
+const SHARED_STORAGE = '0x5ba7ed00000000000000000000000000000000aa';
+const SHARED_TOKEN = '0x5ba7ed00000000000000000000000000000000bb';
+const NOT_THE_ARTIFACT = '0x5ba7ed00000000000000000000000000000000cc';
+const CODE: Record<string, string> = {
+  [SHARED_STORAGE]: STORAGE.deployedBytecode,
+  [SHARED_TOKEN]: TOKEN.deployedBytecode,
+  [NOT_THE_ARTIFACT]: '0x6080604052600080fd',
+};
 
 class FakeRpc implements RpcCaller {
   async call<T>(method: string, params: readonly any[] = []): Promise<T> {
@@ -27,6 +38,8 @@ class FakeRpc implements RpcCaller {
         return '0x5208' as T;
       case 'eth_gasPrice':
         return '0x3b9aca00' as T;
+      case 'eth_getCode':
+        return (CODE[String(params[0]).toLowerCase()] ?? '0x') as T;
       case 'eth_getBlockByNumber': {
         const n = Number(BigInt(String(params[0])));
         // Like the Portaldot node: older state is discarded.
@@ -372,6 +385,86 @@ describe('guided Storage checklist', () => {
     expect(data.template.write.args).toEqual([sampleOrderRef(g.projectId)]);
     expect(Buffer.from(data.template.write.args[0].slice(2), 'hex').toString('ascii')).toMatch(/^pd-sample-order-[0-9a-f]{8}\0+$/);
     expect(data.template.write.explicitValue).toBe(true);
+  });
+});
+
+describe('shared template contracts (no deployment)', () => {
+  const base = (projectId: string) => `/workspace/projects/${projectId}/playground`;
+  beforeAll(() => {
+    process.env.PALLETDOCK_PLAYGROUND_SHARED_STORAGE = `${SHARED_STORAGE}:60:0x${'ab'.repeat(32)}`;
+    process.env.PALLETDOCK_PLAYGROUND_SHARED_ERC20 = `${SHARED_TOKEN}:60`;
+    process.env.PALLETDOCK_PLAYGROUND_SHARED_ERC721 = `${NOT_THE_ARTIFACT}:60`;
+  });
+  afterAll(() => {
+    delete process.env.PALLETDOCK_PLAYGROUND_SHARED_STORAGE;
+    delete process.env.PALLETDOCK_PLAYGROUND_SHARED_ERC20;
+    delete process.env.PALLETDOCK_PLAYGROUND_SHARED_ERC721;
+  });
+
+  it('publishes which templates have a shared copy', async () => {
+    const cfg = (await app.inject({ method: 'GET', url: '/auth/playground-config' })).json();
+    const byId = Object.fromEntries(cfg.templates.map((t: { id: string; sharedContract: unknown }) => [t.id, t.sharedContract]));
+    expect(byId.storage).toEqual({ address: SHARED_STORAGE, deployBlock: '60', deployTxHash: `0x${'ab'.repeat(32)}` });
+    expect(byId.payments).toBeNull();
+  });
+
+  it('adds the shared copy only after its code matches the artifact, idempotently and outside the contract quota', async () => {
+    const g = await startGuest();
+    const first = await call(g, 'POST', `${base(g.projectId)}/shared-contract`);
+    expect(first.statusCode, first.body).toBe(201);
+    const again = await call(g, 'POST', `${base(g.projectId)}/shared-contract`);
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data).toEqual({ id: first.json().data.id, existing: true });
+
+    const guide = (await call(g, 'GET', base(g.projectId))).json().data;
+    expect(guide.contract).toMatchObject({ address: SHARED_STORAGE, shared: true, attached_block: '100', deploy_block: '60' });
+    const step = guide.steps.find((s: { id: string }) => s.id === 'deploy');
+    expect(step).toMatchObject({ title: 'Use the contract', state: 'done' });
+    expect(step.detail).toContain('matched the bundled artifact at block 100');
+    // Not counted: the visitor can still deploy or import their own two contracts.
+    expect((await call(g, 'GET', '/auth/me')).json().playground.used.contracts).toBe(0);
+
+    // Indexing starts where this workspace added the contract, and says what it does not cover.
+    const src = await call(g, 'POST', `${base(g.projectId)}/indexer-source`, { contractId: first.json().data.id });
+    expect(src.statusCode, src.body).toBe(201);
+    expect(src.json().data).toMatchObject({ startBlock: '100', shared: true, uncovered: { fromBlock: '60', toBlock: '99' } });
+    const log = await db.pool.query(`SELECT level, message FROM ops_logs WHERE project_id=$1 AND source='indexer'`, [g.projectId]);
+    expect(log.rows).toContainEqual({ level: 'INFO', message: expect.stringContaining('Blocks 60–99') });
+  });
+
+  it('refuses a configured address whose code is not the artifact', async () => {
+    const g = await startGuest(visitor(), { template: 'erc721' });
+    const r = await call(g, 'POST', `${base(g.projectId)}/shared-contract`);
+    expect(r.statusCode).toBe(400);
+    expect(r.json().error.message).toContain("does not have the bundled artifact's runtime code");
+    expect((await db.pool.query(`SELECT count(*)::int AS n FROM contracts WHERE project_id=$1`, [g.projectId])).rows[0].n).toBe(0);
+    // Without a shared copy configured the action is unavailable.
+    await call(g, 'POST', `${base(g.projectId)}/template`, { template: 'payments' });
+    expect((await call(g, 'POST', `${base(g.projectId)}/shared-contract`)).statusCode).toBe(404);
+  });
+
+  it('switching template adds the shared copy; on the shared ERC-20 the guided write is approve', async () => {
+    const g = await startGuest();
+    const sw = await call(g, 'POST', `${base(g.projectId)}/template`, { template: 'erc20' });
+    expect(sw.json().data.shared).toEqual({ contractId: expect.any(String) });
+    const tpl = (await call(g, 'GET', base(g.projectId))).json().data.template;
+    expect(tpl.write.function).toBe('approve(address,uint256)');
+    expect(tpl.event.name).toBe('Approval');
+  });
+
+  it('matches runtime code exactly or with filled-in immutables only', () => {
+    const artifact = '0x6080' + '00'.repeat(32) + 'fe';
+    const filled = '0x6080' + '00'.repeat(12) + '7a3f09c2d4e81b6a5f3c90e7d12b48a6e0f9c315' + 'fe';
+    expect(codeMatchesArtifact(artifact, artifact)).toEqual({ match: true, immutablesFilled: false });
+    expect(codeMatchesArtifact(filled, artifact)).toEqual({ match: true, immutablesFilled: true });
+    expect(codeMatchesArtifact('0x6081' + '00'.repeat(32) + 'fe', artifact).match).toBe(false);
+    expect(codeMatchesArtifact(artifact + '00', artifact).match).toBe(false);
+    expect(codeMatchesArtifact('0x', artifact).match).toBe(false);
+  });
+
+  it('rejects a malformed shared contract setting', () => {
+    expect(() => resolveGuestConfig({ PALLETDOCK_PLAYGROUND_SHARED_STORAGE: '0x1234' })).toThrow(/PALLETDOCK_PLAYGROUND_SHARED_STORAGE/);
+    expect(resolveGuestConfig({ PALLETDOCK_PLAYGROUND_SHARED_STORAGE: `${SHARED_STORAGE.toUpperCase().replace('0X', '0x')}:7` }).shared.storage).toEqual({ address: SHARED_STORAGE, deployBlock: '7', deployTxHash: null });
   });
 });
 

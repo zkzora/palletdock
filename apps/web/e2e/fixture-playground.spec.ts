@@ -15,6 +15,7 @@ const state = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../.
   accounts: string[];
   signupInviteCode: string;
   databaseUrl: string;
+  sharedStorage: string;
 };
 
 const guide = (page: Page) => page.getByRole('region', { name: 'Playground guide' });
@@ -77,7 +78,7 @@ test.describe.configure({ mode: 'serial' });
 test.describe('playground (desktop)', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 1280) < 860, 'Full journeys run on desktop; mobile has its own layout test.');
 
-  test('Storage: start without account or wallet, deploy, read, write, index, query the API, and save', async ({ page, context }) => {
+  test('Storage: start without account or wallet, use the shared contract, read, write, index, query the API, and save', async ({ page, context }) => {
     await installFixtureWallet(page, { rpcUrl: state.rpcUrl, account: state.accounts[0] });
 
     // Rendering and prefetching create nothing.
@@ -87,6 +88,10 @@ test.describe('playground (desktop)', () => {
     await expect(page.getByText(/Real testnet transactions/)).toBeVisible();
     await expect(page.getByText(/needs test tPOT/)).toBeVisible();
     await expect(page.getByText(/lasts 6 hours from the moment you start it/)).toBeVisible();
+    // Storage has the operator's shared copy; the others are deployed by the visitor.
+    const templates = page.getByRole('group', { name: 'Templates' });
+    await expect(templates.getByRole('button', { name: /^Storage/ })).toContainText('Ready: shared contract, no deployment');
+    await expect(templates.getByRole('button', { name: /^ERC-721/ })).toContainText('You deploy it');
     expect((await context.cookies()).some((c) => c.name === 'palletdock_session')).toBe(false);
 
     await startPlayground(page);
@@ -101,13 +106,15 @@ test.describe('playground (desktop)', () => {
     await expect(page.getByText('Temporary playground · expires')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Save workspace' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Playground', level: 1 })).toBeVisible();
-    await observed(page, 1);
+    // The shared contract was added at start after its code matched the artifact: no deployment, no deposit.
+    await observed(page, 2);
+    await expect(guide(page).getByText(new RegExp(`Shared PalletDockStorage at ${state.sharedStorage}`, 'i'))).toBeVisible();
     // No wallet prompt on load.
     expect(await page.evaluate(() => (window as any).__pdWallet.connected)).toBe(false);
 
-    await deployFromGuide(page);
     await startIndexingAndRead(page, 'retrieve()');
 
+    await connectWallet(page);
     await guide(page).getByRole('link', { name: 'Prepare store(uint256)' }).click();
     await expect(page.locator('#write-0')).toHaveValue('42');
     await signWrite(page);
@@ -183,7 +190,7 @@ test.describe('playground (desktop)', () => {
 
   test('wrong chain is switched before signing; a wallet rejection completes nothing', async ({ page }) => {
     await installFixtureWallet(page, { rpcUrl: state.rpcUrl, account: state.accounts[0], chainId: '0x1' });
-    await startPlayground(page);
+    await startPlayground(page, /^ERC-721 collectible/);
     await guide(page).getByRole('link', { name: 'Open deploy' }).click();
     await connectWallet(page);
     await expect(page.locator('.header-actions').getByRole('button', { name: 'Wrong network' })).toBeVisible();

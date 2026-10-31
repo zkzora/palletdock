@@ -44,10 +44,11 @@ import {
   validateArtifact,
   type PortaldotNetworkConfig,
 } from '@palletdock/shared';
-import { playgroundTemplate, resolvedTemplate, sampleArtifacts } from '@palletdock/contracts';
+import { codeMatchesArtifact, playgroundTemplate, resolvedTemplate, sampleArtifacts, sharedVariant, type PlaygroundTemplateId } from '@palletdock/contracts';
 import { PLAYGROUND_TEMPLATE_IDS } from '@palletdock/shared';
 import { activeFingerprint, activeUnitPolicy, fail, guestRestricted, isUuid, lockProject, param, QuotaError, UNIT_SOURCE_COLUMNS, workspaceGuard, type SessionAuth } from './context.js';
 import { assertContractQuota, assertSourceQuota, keyExpirySql } from './playground.js';
+import { resolveGuestConfig } from './guest-config.js';
 
 export interface WorkspaceDeps {
   network?: PortaldotNetworkConfig;
@@ -1261,15 +1262,19 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       const pid = g.project.id as string;
       const tpl = playgroundTemplate(g.project.playground_template);
       const progress = (g.project.playground_progress ?? {}) as { reads?: Record<string, { function: string; blockNumber: string; at: string }> };
-      if (!tpl) return { data: { template: null, contract: null, deploy: null, read: null, interaction: null, source: null, event: null, apiQuery: null, steps: guideSteps(null) } };
+      if (!tpl) return { data: { template: null, sharedContract: null, contract: null, deploy: null, read: null, interaction: null, source: null, event: null, apiQuery: null, steps: guideSteps(null) } };
+      const sharedContract = resolveGuestConfig().shared[tpl.id] ?? null;
 
+      // The visitor's own deployed copy wins over the operator's shared copy.
       const [contractRow, deployRow] = await Promise.all([
         pool.query(
-          `SELECT c.id,c.name,c.address,c.deploy_block::text AS deploy_block,c.deploy_tx_hash,c.created_at
-             FROM contracts c JOIN artifacts a ON a.id=c.artifact_id
-            WHERE c.project_id=$1 AND c.removed_at IS NULL AND c.source='deployed' AND a.provenance='bundled-sample' AND a.contract_name=$2
-            ORDER BY c.created_at DESC LIMIT 1`,
-          [pid, tpl.contractName],
+          `SELECT c.id,c.name,c.address,c.deploy_block::text AS deploy_block,c.deploy_tx_hash,c.created_at,
+                  c.source='imported' AS shared, c.code_observed->>'blockNumber' AS attached_block
+             FROM contracts c LEFT JOIN artifacts a ON a.id=c.artifact_id
+            WHERE c.project_id=$1 AND c.removed_at IS NULL
+              AND ((c.source='deployed' AND a.provenance='bundled-sample' AND a.contract_name=$2) OR (c.source='imported' AND lower(c.address)=$3))
+            ORDER BY (c.source='deployed') DESC, c.created_at DESC LIMIT 1`,
+          [pid, tpl.contractName, sharedContract?.address ?? ''],
         ),
         pool.query(
           `SELECT t.id,t.hash,t.submission_status,t.inclusion_status,t.execution_status,t.tracking_status,t.contract_id,t.error_message,t.created_at
@@ -1281,6 +1286,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       ]);
       const contract = contractRow.rows[0] ?? null;
       const deploy = deployRow.rows[0] ?? null;
+      // On the shared copy some templates use another write (ERC-20: approve, since the visitor holds no tokens).
+      const eff = contract?.shared ? sharedVariant(tpl) : tpl;
       let interaction: Record<string, any> | null = null;
       let source: Record<string, any> | null = null;
       let event: Record<string, any> | null = null;
@@ -1291,7 +1298,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
             `SELECT id,hash,submission_status,inclusion_status,execution_status,indexing_status,error_message,block_number::text AS block_number,created_at
                FROM transactions WHERE project_id=$1 AND contract_id=$2 AND kind='call' AND function_name=$3 AND submission_status <> 'prepared'
               ORDER BY (execution_status='success') DESC, created_at DESC LIMIT 1`,
-            [pid, contract.id, tpl.write.function],
+            [pid, contract.id, eff.write.function],
           ),
           pool.query(
             `SELECT s.id,s.status,s.desired_state,s.start_block::text AS start_block,s.last_error,s.latest_observed_block::text AS latest_observed_block,
@@ -1299,7 +1306,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
                FROM indexer_sources s LEFT JOIN indexer_checkpoints ck ON ck.source_id=s.id
               WHERE s.project_id=$1 AND s.contract_id=$2 AND s.desired_state <> 'deleted' AND $3 = ANY(s.event_names)
               ORDER BY s.created_at DESC LIMIT 1`,
-            [pid, contract.id, tpl.event.name],
+            [pid, contract.id, eff.event.name],
           ),
         ]);
         interaction = ix.rows[0] ?? null;
@@ -1312,7 +1319,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
                    FROM raw_logs r JOIN decoded_events d ON d.raw_log_id=r.id JOIN indexer_sources s ON s.id=r.source_id
                   WHERE r.project_id=$1 AND r.canonical AND s.contract_id=$2 AND d.status='decoded' AND d.event_name=$3 AND lower(r.transaction_hash)=lower($4)
                   ORDER BY r.seq DESC LIMIT 1`,
-                [pid, contract.id, tpl.event.name, interaction.hash],
+                [pid, contract.id, eff.event.name, interaction.hash],
               )
             ).rows[0] ?? null;
         }
@@ -1331,7 +1338,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       const read = contract ? (progress.reads?.[contract.id] ?? null) : null;
       return {
         data: {
-          template: resolvedTemplate(tpl, pid),
+          template: resolvedTemplate(eff, pid),
+          sharedContract,
           contract,
           deploy,
           read,
@@ -1339,7 +1347,7 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
           source,
           event,
           apiQuery,
-          steps: guideSteps({ tpl, contract, deploy, read, interaction, source, event, apiQuery }),
+          steps: guideSteps({ tpl: eff, sharedAvailable: !!sharedContract, contract, deploy, read, interaction, source, event, apiQuery }),
           finality: 'unknown',
         },
       };
@@ -1352,26 +1360,114 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
       const template = body(request).template;
       if (!PLAYGROUND_TEMPLATE_IDS.includes(template as never)) return fail(reply, 'INVALID_REQUEST', 'Choose one of the bundled templates.');
       await pool.query(`UPDATE projects SET playground_template=$2, updated_at=now() WHERE id=$1`, [g.project.id, template]);
-      return { data: { template } };
+      // Best effort: when the operator shares a deployed copy, add it so the visitor can skip deployment.
+      let shared: { contractId: string } | { error: string } | null = null;
+      if (resolveGuestConfig().shared[template as PlaygroundTemplateId]) {
+        const r = await attachShared(g.project.id, template as PlaygroundTemplateId);
+        shared = r.ok ? { contractId: r.contractId } : { error: r.message };
+      }
+      return { data: { template, shared } };
     });
+
+    // Explicit and idempotent: adds the operator's shared copy of the chosen template to this project.
+    app.post(`${P}/playground/shared-contract`, async (request, reply) => {
+      const g = await workspaceGuard(pool, request, reply, { mutate: true });
+      if (!g) return;
+      if (!g.project.playground) return noGuide(reply);
+      const tpl = playgroundTemplate(g.project.playground_template);
+      if (!tpl) return fail(reply, 'INVALID_REQUEST', 'Choose a template first.');
+      const r = await attachShared(g.project.id, tpl.id);
+      if (!r.ok) return fail(reply, r.code, r.message);
+      return reply.code(r.existing ? 200 : 201).send({ data: { id: r.contractId, existing: r.existing } });
+    });
+
+    /**
+     * Track the operator's shared copy of a template contract in this project, after checking that
+     * its runtime code is the bundled artifact's. It never counts toward a guest's contract quota.
+     */
+    async function attachShared(
+      projectId: string,
+      tplId: PlaygroundTemplateId,
+    ): Promise<{ ok: true; contractId: string; existing: boolean } | { ok: false; code: 'NOT_FOUND' | 'INVALID_REQUEST' | 'SERVICE_UNAVAILABLE'; message: string }> {
+      const tpl = playgroundTemplate(tplId)!;
+      const shared = resolveGuestConfig().shared[tplId];
+      if (!shared) return { ok: false, code: 'NOT_FOUND', message: `No shared ${tpl.title} contract is configured on this deployment. Deploy your own copy instead.` };
+      const trackedSql = `SELECT id FROM contracts WHERE project_id=$1 AND lower(address)=$2 AND removed_at IS NULL`;
+      const tracked = await pool.query(trackedSql, [projectId, shared.address]);
+      if (tracked.rowCount) return { ok: true, contractId: tracked.rows[0].id, existing: true };
+      const fp = await activeFingerprint(pool);
+      if (!fp) return { ok: false, code: 'SERVICE_UNAVAILABLE', message: 'The Portaldot network identity has not been verified yet, so the shared contract cannot be checked.' };
+      let code: Hex;
+      let observedBlock: string;
+      try {
+        observedBlock = await evm.blockNumber();
+        code = await evm.codeAt(shared.address, BigInt(observedBlock));
+      } catch (e) {
+        return { ok: false, code: 'SERVICE_UNAVAILABLE', message: `The shared contract's runtime code could not be checked: ${rpcErrorMessage(e)}` };
+      }
+      const artifact = sampleArtifacts().find((s) => s.id === tpl.sampleId)!.artifact;
+      const check = codeMatchesArtifact(code, artifact.deployedBytecode);
+      if (!check.match) {
+        return {
+          ok: false,
+          code: 'INVALID_REQUEST',
+          message: `The shared ${tpl.contractName} at ${shared.address} does not have the bundled artifact's runtime code (checked at block ${observedBlock}), so it is not used. Deploy your own copy instead.`,
+        };
+      }
+      const out = await withTx(pool, async (c) => {
+        await lockProject(c, projectId);
+        const again = await c.query(trackedSql, [projectId, shared.address]);
+        if (again.rowCount) return { id: again.rows[0].id as string, existing: true };
+        const ct = await c.query(
+          `INSERT INTO contracts(project_id,fingerprint_id,name,address,source,deploy_tx_hash,deploy_block,code_observed)
+           VALUES ($1,$2,$3,$4,'imported',$5,$6,$7) RETURNING id`,
+          [
+            projectId,
+            fp.id,
+            tpl.contractName,
+            shared.address,
+            shared.deployTxHash,
+            shared.deployBlock,
+            JSON.stringify({
+              blockNumber: observedBlock,
+              codeBytes: (code.length - 2) / 2,
+              codeSha256: sha256(code),
+              checkedAt: new Date().toISOString(),
+              playgroundShared: { template: tpl.id, matchesArtifact: tpl.contractName, immutablesFilled: check.immutablesFilled },
+            }),
+          ],
+        );
+        const abiJson = JSON.stringify(artifact.abi);
+        await c.query(`INSERT INTO abi_versions(contract_id,version,abi,abi_sha256,provenance) VALUES ($1,1,$2,$3,'import')`, [ct.rows[0].id, abiJson, sha256(abiJson)]);
+        await c.query(`UPDATE projects SET updated_at=now() WHERE id=$1`, [projectId]);
+        return { id: ct.rows[0].id as string, existing: false };
+      });
+      return { ok: true, contractId: out.id, existing: out.existing };
+    }
 
     // Explicit and idempotent: a repeated call returns the existing source instead of creating another.
     app.post(`${P}/playground/indexer-source`, async (request, reply) => {
       const g = await workspaceGuard(pool, request, reply, { mutate: true });
       if (!g) return;
       if (!g.project.playground) return noGuide(reply);
-      const tpl = playgroundTemplate(g.project.playground_template);
-      if (!tpl) return fail(reply, 'INVALID_REQUEST', 'Choose a template first.');
+      const base = playgroundTemplate(g.project.playground_template);
+      if (!base) return fail(reply, 'INVALID_REQUEST', 'Choose a template first.');
       const b = body(request);
       const c = await contractOf(g.project.id, String(b.contractId ?? ''));
       if (!c || c.removed_at) return fail(reply, 'NOT_FOUND', 'Contract not found in this project.');
+      const sharedCfg = resolveGuestConfig().shared[base.id];
+      const shared = !!sharedCfg && c.source === 'imported' && String(c.address).toLowerCase() === sharedCfg.address;
+      const tpl = shared ? sharedVariant(base) : base;
       const existing = await pool.query(
         `SELECT id, start_block::text AS start_block FROM indexer_sources WHERE project_id=$1 AND contract_id=$2 AND desired_state <> 'deleted' AND $3 = ANY(event_names) ORDER BY created_at DESC LIMIT 1`,
         [g.project.id, c.id, tpl.event.name],
       );
       if (existing.rowCount) return { data: { id: existing.rows[0].id, existing: true, startBlock: existing.rows[0].start_block } };
       if (!c.deploy_block) return fail(reply, 'INVALID_REQUEST', 'No deployment block is recorded for this contract. Configure the source on the Indexer page with a block you know is at or before deployment.');
-      const deployBlock = BigInt(c.deploy_block);
+      // Every visitor uses the shared copy: this workspace covers it from the block where it was added
+      // here (before any write of this visitor), and states that earlier blocks are not covered.
+      const deployBlock = shared ? BigInt((c.code_observed as { blockNumber: string }).blockNumber) : BigInt(c.deploy_block);
+      const contractDeployBlock = BigInt(c.deploy_block);
       // A later start block is accepted only as the visitor's explicit recovery choice, never silently.
       const explicit = typeof b.startBlock === 'string' && /^(0|[1-9][0-9]{0,18})$/.test(b.startBlock) ? BigInt(b.startBlock) : null;
       if (explicit !== null && explicit < deployBlock) return fail(reply, 'INVALID_REQUEST', `Start block is before the deployment block ${deployBlock}.`);
@@ -1404,6 +1500,15 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
         return { data: { id: created.id, existing: true, startBlock: s.rows[0].start_block } };
       }
       const id = created.id;
+      if (shared) {
+        await pool.query(`INSERT INTO ops_logs(project_id,source,level,message,detail,indexer_source_id) VALUES ($1,'indexer','INFO',$2,$3,$4)`, [
+          g.project.id,
+          `Shared playground contract: indexing starts at block ${start}, where this workspace added it. Blocks ${contractDeployBlock}–${start - 1n} (earlier visitors' events) are not covered.`,
+          JSON.stringify({ deployBlock: contractDeployBlock.toString(), addedAtBlock: deployBlock.toString(), startBlock: start.toString() }),
+          id,
+        ]);
+        return reply.code(201).send({ data: { id, existing: false, startBlock: start.toString(), shared: true, uncovered: start > contractDeployBlock ? { fromBlock: contractDeployBlock.toString(), toBlock: (start - 1n).toString() } : null } });
+      }
       if (start > deployBlock) {
         await pool.query(`INSERT INTO ops_logs(project_id,source,level,message,detail,indexer_source_id) VALUES ($1,'indexer','WARN',$2,$3,$4)`, [
           g.project.id,
@@ -1420,6 +1525,8 @@ export function registerWorkspace(app: FastifyInstance, pool: pg.Pool, deps: Wor
 type GuideState = 'done' | 'in_progress' | 'todo' | 'attention';
 interface GuideFacts {
   tpl: NonNullable<ReturnType<typeof playgroundTemplate>>;
+  /** The operator configured a shared, already deployed copy of this template. */
+  sharedAvailable: boolean;
   contract: Record<string, any> | null;
   deploy: Record<string, any> | null;
   read: { function: string; blockNumber: string } | null;
@@ -1458,7 +1565,7 @@ function guideSteps(f: GuideFacts | null): Array<{ id: string; title: string; st
       { id: 'api', title: 'Query application data', state: 'todo', detail: 'Available after the event is indexed.' },
     ];
   }
-  const { tpl, contract, deploy, read, interaction, source, event, apiQuery } = f;
+  const { tpl, sharedAvailable, contract, deploy, read, interaction, source, event, apiQuery } = f;
   const deployState: GuideState = contract ? 'done' : txState(deploy) === 'done' ? 'in_progress' : txState(deploy);
   const writeState: GuideState = contract ? txState(interaction) : 'todo';
   let eventState: GuideState = 'todo';
@@ -1468,7 +1575,9 @@ function guideSteps(f: GuideFacts | null): Array<{ id: string; title: string; st
     eventDetail = `${tpl.event.name} indexed in block ${event.block_number} and decoded.`;
   } else if (contract && !source) {
     eventState = writeState === 'done' ? 'attention' : 'todo';
-    eventDetail = `No indexer source covers ${tpl.event.name} yet. Start indexing from the deployment block so the event is not missed.`;
+    eventDetail = contract.shared
+      ? `No indexer source covers ${tpl.event.name} yet. Start indexing before you write so your event is not missed.`
+      : `No indexer source covers ${tpl.event.name} yet. Start indexing from the deployment block so the event is not missed.`;
   } else if (source && ['error', 'recovery_required'].includes(source.status)) {
     eventState = 'attention';
     eventDetail = `The indexer source needs attention: ${source.last_error ?? source.status}.`;
@@ -1480,9 +1589,19 @@ function guideSteps(f: GuideFacts | null): Array<{ id: string; title: string; st
     { id: 'template', title: 'Choose template', state: 'done', detail: `${tpl.title} (${tpl.contractName}).` },
     {
       id: 'deploy',
-      title: 'Deploy contract',
+      title: contract?.shared || (!contract && !deploy && sharedAvailable) ? 'Use the contract' : 'Deploy contract',
       state: deployState,
-      detail: contract ? `Deployed at ${contract.address}${contract.deploy_block ? ` in block ${contract.deploy_block}` : ''}.` : deploy ? (deployState === 'in_progress' && deploy.execution_status === 'success' ? 'Receipt observed; adding the contract to the project.' : txDetail(deploy, 'The deployment')) : 'Not deployed yet.',
+      detail: contract?.shared
+        ? `Shared ${tpl.contractName} at ${contract.address}, deployed in block ${contract.deploy_block}. Its runtime code matched the bundled artifact at block ${contract.attached_block}. Deploying your own copy is optional.`
+        : contract
+          ? `Deployed at ${contract.address}${contract.deploy_block ? ` in block ${contract.deploy_block}` : ''}.`
+          : deploy
+            ? deployState === 'in_progress' && deploy.execution_status === 'success'
+              ? 'Receipt observed; adding the contract to the project.'
+              : txDetail(deploy, 'The deployment')
+            : sharedAvailable
+              ? 'A shared copy is already deployed: use it to skip deployment and its storage deposit, or deploy your own.'
+              : 'Not deployed yet.',
     },
     {
       id: 'read',
