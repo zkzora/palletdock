@@ -16,8 +16,17 @@ export function databaseUrl(env: Record<string, string | undefined> = process.en
   return url;
 }
 
+/** PALLETDOCK_DB_POOL_MAX caps every pool in the process, for hosted poolers with a small connection limit. */
+export function poolMax(requested: number, env: Record<string, string | undefined> = process.env): number {
+  const raw = env.PALLETDOCK_DB_POOL_MAX;
+  if (raw === undefined || raw === '') return requested;
+  const cap = Number(raw);
+  if (!Number.isInteger(cap) || cap < 1) throw new Error('PALLETDOCK_DB_POOL_MAX must be a positive integer.');
+  return Math.min(requested, cap);
+}
+
 export function createPool(url = databaseUrl(), max = 10): pg.Pool {
-  const pool = new pg.Pool({ connectionString: url, max, application_name: process.env.PALLETDOCK_PROCESS ?? 'palletdock' });
+  const pool = new pg.Pool({ connectionString: url, max: poolMax(max), application_name: process.env.PALLETDOCK_PROCESS ?? 'palletdock' });
   pool.on('error', (err) => console.error('[db] idle client error', err.message));
   return pool;
 }
