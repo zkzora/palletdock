@@ -18,7 +18,7 @@ Since 6 November 2026 the hosted demo keeps PostgreSQL on Supabase and runs the 
 | Component | Host | Notes |
 | --- | --- | --- |
 | Next.js web | Vercel | Unchanged |
-| API + worker | One Railway service, `PALLETDOCK_SERVICE=all` | `deploy/railway-start.sh` migrates, runs the worker in the background (restarted if it exits) and the API in the foreground, so the `/health` check follows the API. No pre-deploy command is needed. |
+| API + worker | One Railway service, `PALLETDOCK_SERVICE=all`, region US East (Virginia, next to the database) | `deploy/railway-start.sh` migrates, runs the worker in the background (restarted if it exits) and the API in the foreground, so the `/health` check follows the API. No pre-deploy command is needed. The service deploys from `main` automatically; watch patterns limit rebuilds to `apps/api`, `apps/worker`, `packages`, `deploy`, `Dockerfile.railway` and the workspace manifests, so web-only or docs-only commits do not rebuild it. |
 | PostgreSQL | Supabase (us-east-1) | Session pooler, port 5432 |
 
 Database settings that matter on Supabase:
