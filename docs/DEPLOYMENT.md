@@ -11,6 +11,25 @@ This is the recommended hackathon deployment shape:
 
 The API and worker are separate always-on services built from the same repository. Do not put the worker on Vercel: it must keep polling Portaldot V3 and the node's retained-history window is short.
 
+## Current hosted shape: Supabase database, one Railway container
+
+Since 6 November 2026 the hosted demo keeps PostgreSQL on Supabase and runs the API and worker in **one** Railway service, which uses less of a small plan's credit:
+
+| Component | Host | Notes |
+| --- | --- | --- |
+| Next.js web | Vercel | Unchanged |
+| API + worker | One Railway service, `PALLETDOCK_SERVICE=all` | `deploy/railway-start.sh` migrates, runs the worker in the background (restarted if it exits) and the API in the foreground, so the `/health` check follows the API. No pre-deploy command is needed. |
+| PostgreSQL | Supabase (us-east-1) | Session pooler, port 5432 |
+
+Database settings that matter on Supabase:
+
+- Use the **session** pooler (port 5432), not the transaction pooler (6543): migrations hold a session-level advisory lock.
+- Append `?sslmode=no-verify` to `DATABASE_URL`. node-postgres treats `sslmode=require` as full verification, which fails against Supabase's own CA; `no-verify` keeps TLS encryption.
+- Set `PALLETDOCK_DB_POOL_MAX=5`. It caps every pool in the process, so the API and worker together stay inside the pooler's client limit.
+- Enable row-level security on every `public` table (no policies). Supabase's Data API exposes `public` to the anon key; PalletDock connects as the table owner, which bypasses RLS, so the app is unaffected.
+
+The move from the original Railway PostgreSQL was a plain `pg_dump --no-owner --no-privileges` piped into `psql` against the session pooler; per-table row counts matched except log and probe rows the old worker wrote after the dump. The sections below describe the original two-service Railway layout, which still works.
+
 ## 1. Preflight
 
 1. Commit and push the reviewed working tree. Never commit `.env`, `.data/`, a read key, an owner password, or a wallet key.

@@ -8,7 +8,7 @@ A developer workspace for Solidity builders on **Portaldot V3 Testnet**. Deploy 
 
 ## How to test
 
-The hosted app runs at **[palletdock.vercel.app](https://palletdock.vercel.app/)** on Portaldot V3 Testnet: web on Vercel, API and worker on Railway. Paths 1 and 2 need no install, no account, no wallet, and no test tokens.
+The hosted app runs at **[palletdock.vercel.app](https://palletdock.vercel.app/)** on Portaldot V3 Testnet: web on Vercel, API and worker on Railway (one container), database on Supabase. Paths 1 and 2 need no install, no account, no wallet, and no test tokens.
 
 ### 1. Open the workspace (1 minute, nothing needed)
 
@@ -143,9 +143,9 @@ The 21 October runs used a local application stack connected to the real testnet
 | Component | Implementation | Hosted demo |
 | --- | --- | --- |
 | Web | Next.js, React, Tailwind CSS | Vercel |
-| API | Fastify, TypeScript, viem | Railway |
-| Worker | Independent event indexer, receipt tracker, and network probes | Railway; stays running |
-| Database | PostgreSQL, transactional checkpoints and event commits | Railway; private network |
+| API | Fastify, TypeScript, viem | Railway (same container as the worker) |
+| Worker | Independent event indexer, receipt tracker, and network probes | Railway; stays running, restarted if it exits |
+| Database | PostgreSQL, transactional checkpoints and event commits | Supabase (session pooler, TLS); row-level security closes the Data API |
 
 The web proxies API requests through `/backend/*`. The API and worker share PostgreSQL. Wallet signing stays on the client; the consumer's scoped read key stays on the web server.
 
